@@ -4,10 +4,12 @@ import { isInviteCode, normalizeInviteCode, type GameUser } from "@dirtyworks/sh
 import { AuthError, verifyGameToken } from "../auth";
 import type { ServerConfig } from "../config";
 import type { TableRegistry } from "../game/tableRegistry";
+import type { SnapshotStore } from "../persistence/SnapshotStore";
 
 export interface RouteDeps {
   config: ServerConfig;
   registry: TableRegistry;
+  store: SnapshotStore | null;
 }
 
 export function json(status: number, body: unknown): Response {
@@ -29,7 +31,7 @@ export async function requireUser(
   }
 }
 
-export function createRoutes({ config, registry }: RouteDeps) {
+export function createRoutes({ config, registry, store }: RouteDeps) {
   return createRouter({
     health: createEndpoint("/health", { method: "GET" }, async () => json(200, { ok: true })),
 
@@ -49,6 +51,19 @@ export function createRoutes({ config, registry }: RouteDeps) {
       }
       if (!room) return json(404, { error: "NOT_FOUND" });
       return json(200, { roomId, locked: Boolean(room.metadata?.locked) });
+    }),
+
+    savedTables: createEndpoint("/tables/saved", { method: "GET" }, async (ctx) => {
+      const user = await requireUser(ctx.request, config.jwtSecret);
+      if (user instanceof Response) return user;
+      return json(200, { tables: store ? await store.list(user.id) : [] });
+    }),
+
+    deleteSavedTable: createEndpoint("/tables/saved/:id", { method: "DELETE" }, async (ctx) => {
+      const user = await requireUser(ctx.request, config.jwtSecret);
+      if (user instanceof Response) return user;
+      const removed = store ? await store.remove(String(ctx.params?.id ?? ""), user.id) : false;
+      return json(removed ? 200 : 404, { removed });
     }),
   });
 }

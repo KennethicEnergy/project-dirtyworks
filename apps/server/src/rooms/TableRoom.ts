@@ -11,6 +11,9 @@ import {
   clampJoints,
   dayNightMsgSchema,
   emptyMsgSchema,
+  encodeOp,
+  keepMsgSchema,
+  MATERIALS,
   makeInviteCode,
   MAPS,
   mapBounds,
@@ -28,6 +31,8 @@ import {
   stateMsgSchema,
   tableSettingsSchema,
   targetMsgSchema,
+  terrainIntentSchema,
+  terrainResyncSchema,
   VEHICLES,
   canCreateTable,
   type ChatEntry,
@@ -48,6 +53,7 @@ import {
 import { z } from "zod";
 import { hashPassword, verifyPassword } from "../game/password";
 import { MovementGuard } from "../game/MovementGuard";
+import { TerrainAuthority, type Actor } from "../game/TerrainAuthority";
 import type { Logger } from "../logger";
 import { authenticate, reject, roomDeps, VERIFIED_USER, type RoomDeps } from "./auth";
 import { PlayerState, TableState } from "./schema";
@@ -59,6 +65,10 @@ export const CLOSE = { KICKED: 4100, BANNED: 4101, CLOSED: 4102, MISBEHAVING: 41
 const VIOLATION_LIMIT = 20;
 const VIOLATION_WINDOW_MS = 10_000;
 const PING_INTERVAL_MS = 2000;
+/** How often a kept table is saved while it changes. */
+const KEEP_SAVE_INTERVAL_MS = 60_000;
+/** Terrain intents are rate limited by the message handler; validation needs no second bucket. */
+const UNLIMITED = { take: () => true };
 
 const joinOptionsSchema = z.object({
   role: z.enum(ROLES).default("driver"),
@@ -87,6 +97,8 @@ export class TableRoom extends Room<{ state: TableState; metadata: TableListing 
   private map!: TableMap;
   private materialId!: MaterialId;
   private passwordHash: string | null = null;
+  private terrain!: TerrainAuthority;
+  private lastSavedSeq = -1;
   private creatorId = "";
   private createdAt = 0;
   private readonly bans = new Set<string>();
@@ -138,14 +150,37 @@ export class TableRoom extends Room<{ state: TableState; metadata: TableListing 
     this.createdAt = this.deps.now();
     if (this.settings.password) this.passwordHash = await hashPassword(this.settings.password);
 
+    // Reopening a kept table: only its owner can, and only on the same diorama.
+    let tableId = generateId(16);
+    let restored: Uint8Array | null = null;
+    if (this.settings.restoreId && this.deps.store) {
+      const saved = await this.deps.store.load(this.settings.restoreId, creator.id);
+      if (saved && saved.meta.mapId === this.settings.mapId) {
+        tableId = saved.meta.tableId;
+        restored = saved.data;
+        if (saved.meta.materialId in MATERIALS)
+          this.materialId = saved.meta.materialId as MaterialId;
+      }
+    }
+    this.terrain = new TerrainAuthority(this.map, MATERIALS[this.materialId]);
+    if (restored) {
+      try {
+        this.terrain.restore(restored);
+        this.log.info("table restored", { tableId });
+      } catch (err) {
+        this.log.warn("saved table could not be restored", { tableId, err });
+      }
+    }
+    this.lastSavedSeq = restored ? this.terrain.seq : -1;
+
     const state = new TableState();
-    state.tableId = this.settings.restoreId ?? generateId(16);
+    state.tableId = tableId;
     state.name = this.settings.name;
     state.mapId = this.settings.mapId;
     state.materialId = this.materialId;
     state.vibe = this.settings.vibe;
     state.rule = this.settings.rule;
-    state.keepForLater = this.settings.keepForLater;
+    state.keepForLater = this.settings.keepForLater || restored !== null;
     this.setState(state);
 
     this.maxClients = this.settings.maxPlayers + MAX_SPECTATORS;
@@ -156,6 +191,7 @@ export class TableRoom extends Room<{ state: TableState; metadata: TableListing 
 
     this.registerMessages();
     this.clock.setInterval(() => this.sendPings(), PING_INTERVAL_MS);
+    this.clock.setInterval(() => void this.persist(), KEEP_SAVE_INTERVAL_MS);
     this.log.info("table created", {
       userId: creator.id,
       mapId: this.settings.mapId,
@@ -237,13 +273,30 @@ export class TableRoom extends Room<{ state: TableState; metadata: TableListing 
     this.info.delete(client.sessionId);
     if (this.state.hostId === client.sessionId) this.passHost(client.sessionId);
     this.notice({ kind: "leave", name: player.name, text: `${player.name} headed home.` });
+    if (
+      this.settings.terrainPersistence === "none" &&
+      this.counts().drivers === 0 &&
+      this.terrain.seq > 0
+    ) {
+      this.resetTerrain("Fresh sand for the next crew.");
+    }
     if (this.state.players.size > 0) await this.setMetadata(this.listing());
     this.log.info("player left", { userId: player.userId });
   }
 
-  override onDispose() {
+  override async onDispose() {
     this.deps?.registry.remove(this.roomId);
+    if (this.terrain) await this.persist();
     this.log?.info("table disposed");
+  }
+
+  /** Current terrain op sequence number (tests and diagnostics). */
+  terrainSeq(): number {
+    return this.terrain.seq;
+  }
+
+  terrainHash(): number {
+    return this.terrain.hash();
   }
 
   // ─── messages ────────────────────────────────────────────────────────────
@@ -300,7 +353,7 @@ export class TableRoom extends Room<{ state: TableState; metadata: TableListing 
       if (!player || info.role !== "driver") return;
       const spec = VEHICLES[msg.vehicle];
       const spawnPoint = this.pickSpawn(client.sessionId);
-      const y = this.map.baseTerrain.groundHeight + 1;
+      const y = this.terrain.heightAt(spawnPoint.x, spawnPoint.z) + 1;
       const q = quatFromYaw(spawnPoint.yaw, { x: 0, y: 0, z: 0, w: 1 });
       const pose: Pose = {
         x: spawnPoint.x,
@@ -335,6 +388,56 @@ export class TableRoom extends Room<{ state: TableState; metadata: TableListing 
         yaw: spawnPoint.yaw,
       };
       client.send(MSG.spawned, spawned);
+    });
+
+    this.handle(MSG.terrainOp, "terrainOp", terrainIntentSchema, (client, intent, info) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player || info.role !== "driver" || !player.vehicle) return;
+      const result = this.terrain.handle(intent, this.actorFor(player, info), this.trucks());
+      if (!result.ok) {
+        const level = result.reason === "rate" ? "debug" : "info";
+        this.log[level]("terrain op rejected", {
+          userId: info.user.id,
+          kind: intent.kind,
+          reason: result.reason,
+        });
+        return;
+      }
+      for (const [sessionId, load] of Object.entries(result.loads)) {
+        const p = this.state.players.get(sessionId);
+        if (p) p.load = Math.max(0, load);
+      }
+      if (result.movedQ > 0) player.moved = Math.min(0xffffffff, player.moved + result.movedQ);
+      for (const op of result.ops) this.broadcast(MSG.terrainOp, encodeOp(op));
+    });
+
+    this.handle(MSG.terrainResync, "terrainResync", terrainResyncSchema, (client, msg) => {
+      const ops = this.terrain.opsSince(msg.fromSeq);
+      if (ops) for (const op of ops) client.send(MSG.terrainOp, encodeOp(op));
+      else
+        client.send(MSG.terrainSnapshot, {
+          seq: this.terrain.seq,
+          snapshot: this.terrain.snapshot(),
+          reset: false,
+        });
+    });
+
+    this.handle(MSG.terrainReset, "host", emptyMsgSchema, (client) => {
+      if (!this.isHost(client)) return;
+      this.resetTerrain("The host smoothed the table. Fresh start!");
+    });
+
+    this.handle(MSG.setKeepForLater, "host", keepMsgSchema, (client, msg) => {
+      if (!this.isHost(client)) return;
+      this.state.keepForLater = msg.keep;
+      if (msg.keep) void this.persist(true);
+      this.notice({
+        kind: "info",
+        name: "",
+        text: msg.keep
+          ? "This table will be kept for 7 days."
+          : "This table won't be kept after it closes.",
+      });
     });
 
     this.handle(MSG.chat, "chat", chatMsgSchema, (client, msg, info) => {
@@ -480,8 +583,8 @@ export class TableRoom extends Room<{ state: TableState; metadata: TableListing 
       mapId: this.settings.mapId,
       materialId: this.materialId,
       inviteCode: this.inviteCode,
-      seq: 0,
-      snapshot: new Uint8Array(0),
+      seq: this.terrain.seq,
+      snapshot: this.terrain.snapshot(),
       chat: this.chat.slice(),
       serverTime: this.deps.now() - this.createdAt,
     };
@@ -541,6 +644,74 @@ export class TableRoom extends Room<{ state: TableState; metadata: TableListing 
       }
     }
     return best;
+  }
+
+  private actorFor(player: PlayerState, info: ClientInfo): Actor {
+    return {
+      sessionId: player.sessionId,
+      spec: player.vehicle ? VEHICLES[player.vehicle as VehicleId] : null,
+      pose: info.guard ? info.guard.lastValid : null,
+      joints: Array.from(player.joints),
+      loadQ: player.load,
+      bucket: UNLIMITED,
+    };
+  }
+
+  private trucks(): Actor[] {
+    const out: Actor[] = [];
+    this.state.players.forEach((p) => {
+      const info = this.info.get(p.sessionId);
+      if (p.vehicle === "dump-truck" && info) out.push(this.actorFor(p, info));
+    });
+    return out;
+  }
+
+  private resetTerrain(text: string): void {
+    this.terrain.reset();
+    this.state.players.forEach((p) => (p.load = 0));
+    this.broadcast(MSG.terrainSnapshot, {
+      seq: this.terrain.seq,
+      snapshot: this.terrain.snapshot(),
+      reset: true,
+    });
+    this.notice({ kind: "reset", name: "", text });
+    this.log.info("terrain reset");
+  }
+
+  /** Saves the table if it is kept and changed since the last save. */
+  private async persist(force = false): Promise<void> {
+    const store = this.deps.store;
+    if (!store || !this.state.keepForLater) return;
+    if (!force && this.terrain.seq === this.lastSavedSeq) return;
+    const seq = this.terrain.seq;
+    try {
+      const res = await store.save(
+        {
+          tableId: this.state.tableId,
+          ownerId: this.creatorId,
+          name: this.settings.name,
+          mapId: this.settings.mapId,
+          materialId: this.materialId,
+        },
+        this.terrain.snapshot(),
+      );
+      if (res.ok) {
+        this.lastSavedSeq = seq;
+        this.log.info("table saved", { tableId: this.state.tableId, seq });
+      } else {
+        this.log.warn("table not saved", { tableId: this.state.tableId, reason: res.reason });
+        this.notice({
+          kind: "info",
+          name: "",
+          text:
+            res.reason === "USER_LIMIT"
+              ? "The host's shelf of saved tables is full (5). Free one up in the cafe."
+              : "This table got too big to save. Impressive digging!",
+        });
+      }
+    } catch (err) {
+      this.log.error("table save failed", { tableId: this.state.tableId, err });
+    }
   }
 
   private writePose(player: PlayerState, pose: Pose): void {

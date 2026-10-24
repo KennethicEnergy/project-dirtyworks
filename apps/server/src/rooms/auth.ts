@@ -9,6 +9,7 @@ import type { ErrorCode as AppErrorCode, GameUser } from "@dirtyworks/shared";
 import { AuthError, verifyGameToken } from "../auth";
 import type { ServerConfig } from "../config";
 import type { TableRegistry } from "../game/tableRegistry";
+import type { SnapshotStore } from "../persistence/SnapshotStore";
 import type { Logger } from "../logger";
 
 export interface RoomDeps {
@@ -17,6 +18,8 @@ export interface RoomDeps {
   registry: TableRegistry;
   reconnectSeconds: number;
   now: () => number;
+  /** Saved tables ("keep for later"); null disables saving. */
+  store: SnapshotStore | null;
 }
 
 let deps: RoomDeps | undefined;

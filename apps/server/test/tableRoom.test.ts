@@ -1,17 +1,27 @@
 import { Client, type Room as ClientRoom } from "@colyseus/sdk";
 import { boot, type ColyseusTestServer } from "@colyseus/testing";
 import {
+  applySnapshot,
+  applyTerrainOp,
+  createTerrainForMap,
+  decodeOp,
+  decodeSnapshot,
   DEFAULT_LIVERY,
   GAME_TOKEN_AUDIENCE,
   GAME_TOKEN_ISSUER,
+  MAPS,
+  MATERIALS,
   MSG,
+  type MaterialId,
   type SpawnedEvent,
+  type Welcome,
   type TableSettingsInput,
 } from "@dirtyworks/shared";
 import { SignJWT } from "jose";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createLogger } from "../src/logger";
 import type { TableRoom } from "../src/rooms/TableRoom";
+import { createMemorySnapshotStore } from "../src/persistence/SnapshotStore";
 import { createGameServer } from "../src/server";
 
 const SECRET = "integration-secret-at-least-32-characters";
@@ -40,6 +50,7 @@ beforeAll(async () => {
     },
     logger: createLogger("warn", {}, (line) => logLines.push(line)),
     reconnectSeconds: RECONNECT_SECONDS,
+    store: createMemorySnapshotStore(),
   });
   colyseus = await boot(server);
 });
@@ -209,6 +220,133 @@ describe("table auth and creation", () => {
       headers: { authorization: `Bearer ${bob.auth.token}` },
     });
     expect(missing.status).toBe(404);
+  });
+});
+
+describe("terrain", () => {
+  const digAt = (s: SpawnedEvent, i: number) => ({
+    kind: "dig" as const,
+    x: Math.round(s.x * 100) + i * 60,
+    z: Math.round((s.z + 6) * 100),
+    r: 100,
+    d: 25,
+  });
+
+  async function readyWelcome(room: ClientRoom): Promise<Welcome> {
+    const welcome = room.waitForMessage(MSG.welcome);
+    room.send(MSG.ready);
+    return (await welcome) as Welcome;
+  }
+
+  it("lets a late joiner rebuild exactly the server's terrain from welcome + ops", async () => {
+    const { room, server } = await host();
+    const spawned = await spawn(room, "excavator");
+    for (let i = 0; i < 3; i++) room.send(MSG.terrainOp, digAt(spawned, i));
+    await until(() => server.terrainSeq() >= 3);
+
+    const bob = await joinAs(server.roomId, "bob", { role: "spectator" });
+    const terrain = createTerrainForMap(MAPS["mini-quarry"]);
+    let seq = 0;
+    let material = MATERIALS.gravel;
+    bob.room.onMessage(MSG.terrainOp, (wire: unknown) => {
+      const op = decodeOp(wire);
+      if (!op || op.seq <= seq) return;
+      applyTerrainOp(terrain, op, material);
+      seq = op.seq;
+    });
+    const w = await readyWelcome(bob.room);
+    material = MATERIALS[w.materialId as MaterialId];
+    applySnapshot(terrain, decodeSnapshot(new Uint8Array(w.snapshot)));
+    seq = Math.max(seq, w.seq);
+    expect(w.seq).toBe(server.terrainSeq());
+
+    await until(() => server.state.players.get(room.sessionId)!.load > 0);
+    room.send(MSG.terrainOp, {
+      kind: "release",
+      x: Math.round(spawned.x * 100),
+      z: Math.round((spawned.z + 5) * 100),
+    });
+    await until(() => seq === server.terrainSeq() && server.terrainSeq() >= 4);
+    expect(terrain.hash()).toBe(server.terrainHash());
+  });
+
+  it("fills the digger's bucket and counts the volume moved", async () => {
+    const { room, server } = await host();
+    const spawned = await spawn(room, "excavator");
+    room.send(MSG.terrainOp, digAt(spawned, 0));
+    await until(() => server.state.players.get(room.sessionId)!.load > 0);
+    const me = server.state.players.get(room.sessionId)!;
+    expect(me.moved).toBe(me.load);
+  });
+
+  it("ignores terrain ops from spectators", async () => {
+    const { server } = await host();
+    const watcher = await joinAs(server.roomId, "carol", { role: "spectator" });
+    watcher.room.send(MSG.terrainOp, { kind: "dig", x: 3200, z: -1600, r: 100, d: 25 });
+    await sleep(200);
+    expect(server.terrainSeq()).toBe(0);
+  });
+
+  it("answers a resync request with the missed ops", async () => {
+    const { room, server } = await host();
+    const spawned = await spawn(room, "excavator");
+    room.send(MSG.terrainOp, digAt(spawned, 0));
+    await until(() => server.terrainSeq() === 1);
+    const op = room.waitForMessage(MSG.terrainOp);
+    room.send(MSG.terrainResync, { fromSeq: 0 });
+    expect(decodeOp(await op)?.seq).toBe(1);
+  });
+
+  it("lets only the host reset the terrain", async () => {
+    const { room, server } = await host();
+    const spawned = await spawn(room, "excavator");
+    const bob = await joinAs(server.roomId, "bob");
+    room.send(MSG.terrainOp, digAt(spawned, 0));
+    await until(() => server.terrainSeq() === 1);
+    const base = createTerrainForMap(MAPS["mini-quarry"]).hash();
+    bob.room.send(MSG.terrainReset);
+    await sleep(200);
+    expect(server.terrainHash()).not.toBe(base);
+    const snapshot = bob.room.waitForMessage(MSG.terrainSnapshot);
+    room.send(MSG.terrainReset);
+    const msg = (await snapshot) as { seq: number; snapshot: Uint8Array; reset: boolean };
+    expect(msg.reset).toBe(true);
+    expect(decodeSnapshot(new Uint8Array(msg.snapshot)).chunks).toHaveLength(0);
+    expect(server.terrainHash()).toBe(base);
+    expect(server.state.players.get(room.sessionId)!.load).toBe(0);
+  });
+
+  it("keeps a table for later and reopens it with the same terrain", async () => {
+    const { room, server } = await host({ ...SETTINGS, keepForLater: true }, "kim");
+    const spawned = await spawn(room, "excavator");
+    room.send(MSG.terrainOp, digAt(spawned, 0));
+    await until(() => server.terrainSeq() === 1);
+    const hash = server.terrainHash();
+    const tableId = server.state.tableId;
+    await room.leave();
+    await until(() => {
+      try {
+        return colyseus.getRoomById(server.roomId) === undefined;
+      } catch {
+        return true;
+      }
+    });
+    const again = await host({ ...SETTINGS, restoreId: tableId }, "kim");
+    expect(again.server.state.tableId).toBe(tableId);
+    expect(again.server.terrainHash()).toBe(hash);
+  });
+
+  it("will not reopen somebody else's saved table", async () => {
+    const { room, server } = await host({ ...SETTINGS, keepForLater: true }, "lee");
+    const spawned = await spawn(room, "excavator");
+    room.send(MSG.terrainOp, digAt(spawned, 0));
+    await until(() => server.terrainSeq() === 1);
+    const tableId = server.state.tableId;
+    await room.leave();
+    await sleep(300);
+    const other = await host({ ...SETTINGS, restoreId: tableId }, "mal");
+    expect(other.server.state.tableId).not.toBe(tableId);
+    expect(other.server.terrainHash()).toBe(createTerrainForMap(MAPS["mini-quarry"]).hash());
   });
 });
 

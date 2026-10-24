@@ -24,7 +24,7 @@ export interface IntentContext {
   /** Material the player's bucket/bed currently holds (quanta). */
   loadQ: number;
   /** The player's terrain-op rate limiter (10/s). */
-  bucket: TokenBucket;
+  bucket: Pick<TokenBucket, "take">;
 }
 
 /** Network lag lets the tool lead the last validated pose a little. */

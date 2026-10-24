@@ -6,6 +6,7 @@ import type { ServerConfig } from "./config";
 import { TableRegistry } from "./game/tableRegistry";
 import { createRoutes } from "./http/routes";
 import type { Logger } from "./logger";
+import type { SnapshotStore } from "./persistence/SnapshotStore";
 import { configureRooms } from "./rooms/auth";
 import { AuthedLobbyRoom } from "./rooms/AuthedLobbyRoom";
 import { TableRoom } from "./rooms/TableRoom";
@@ -17,6 +18,7 @@ export interface GameServerOptions {
   reconnectSeconds?: number;
   now?: () => number;
   gracefullyShutdown?: boolean;
+  store?: SnapshotStore | null;
 }
 
 export function isAllowedOrigin(origin: string | null, allowed: readonly string[]): boolean {
@@ -34,6 +36,7 @@ export function createGameServer(opts: GameServerOptions): Server {
     registry,
     reconnectSeconds: opts.reconnectSeconds ?? RECONNECT_SECONDS,
     now: opts.now ?? Date.now,
+    store: opts.store ?? null,
   });
 
   // CORS for matchmaking and our routes: echo the origin only when it is allowed.
@@ -60,7 +63,7 @@ export function createGameServer(opts: GameServerOptions): Server {
     greet: false,
     gracefullyShutdown: opts.gracefullyShutdown ?? false,
   });
-  server.router = createRoutes({ config, registry });
+  server.router = createRoutes({ config, registry, store: opts.store ?? null });
   server.define("lobby", AuthedLobbyRoom);
   server.define("table", TableRoom).enableRealtimeListing();
   return server;
