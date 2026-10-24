@@ -14,6 +14,8 @@ export * from "./math";
 export * from "./messages";
 export * from "./movement";
 export * from "./rateLimit";
+export * from "./snapshot";
 export * from "./tables";
 export * from "./terrain";
+export * from "./terrainOps";
 export * from "./vehicles";
