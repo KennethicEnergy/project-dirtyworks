@@ -39,12 +39,14 @@
 ### Task 1: Monorepo scaffold
 
 **Files:**
+
 - Create: `package.json`, `tsconfig.base.json`, `eslint.config.mjs`, `.prettierrc`, `.prettierignore`, `.gitignore`, `.editorconfig`, `.env.example`, `.nvmrc`
 - Create: `packages/shared/{package.json,tsconfig.json,vitest.config.ts,src/index.ts}`
 - Create: `apps/server/{package.json,tsconfig.json,vitest.config.ts,build.mjs,src/index.ts}`
 - Create: `apps/web` via `create-next-app` equivalent files (`package.json`, `next.config.ts`, `tsconfig.json`, `postcss.config.mjs`, `src/app/{layout.tsx,page.tsx,globals.css}`)
 
 **Interfaces:**
+
 - Produces: root scripts `dev`, `build`, `test`, `lint`, `typecheck`, `format`; `@dirtyworks/shared` exports `"."` → `./src/index.ts`.
 
 - [ ] Step 1: Write root `package.json` (workspaces `apps/*`, `packages/*`; `dev` = `concurrently -n web,server "npm:dev -w @dirtyworks/web" "npm:dev -w @dirtyworks/server"`; `build`/`test`/`typecheck` = `npm run <x> --workspaces --if-present`; `lint` = `eslint .`).
@@ -58,6 +60,7 @@
 **Files:** Create `packages/shared/src/{constants.ts,math.ts,vehicles.ts}`, Test `packages/shared/test/vehicles.test.ts`
 
 **Interfaces — Produces:**
+
 - `type VehicleId = "excavator" | "dump-truck" | "bulldozer" | "wheel-loader"`; `VEHICLE_IDS`.
 - `type ToolAxis = 0 | 1 | 2 | 3`; `JointSpec { id; label; node; kind: "rot" | "slide"; axis: "x" | "y" | "z"; min; max; speed; rest; input: ToolAxis; hints: [string, string] }`.
 - `VehicleSpec { id; displayName; blurb; drive: "wheeled" | "tracked"; articulated: boolean; mass; chassis: { size: Vec3; comOffset: Vec3 }; wheels?: WheelSpec[]; tracks?: { width; length; gauge }; maxSpeed; maxAccel; steer: { maxAngle?: number; turnRate?: number }; suspension: { stiffness; damping; travel }; joints: JointSpec[]; rig: ToolRig; tool: ToolSpec; antenna: Vec3 }`.
@@ -77,6 +80,7 @@
 **Files:** Create `packages/shared/src/{rateLimit.ts,tables.ts,livery.ts,emotes.ts,chat.ts,challenges.ts,auth.ts,battery.ts}`; Tests `packages/shared/test/{rateLimit,tables,livery,emotes,chat,challenges,auth,battery}.test.ts`
 
 **Interfaces — Produces:**
+
 - `class TokenBucket { constructor(capacity: number, refillPerSec: number, now?: () => number); take(n?: number): boolean; readonly tokens: number }`.
 - `tableSettingsSchema` (zod) → `TableSettings { name; mapId; vibe: Vibe; rule: TableRule; maxPlayers; visibility: "public" | "private"; password?; materialId?; terrainPersistence: "session" | "none"; keepForLater: boolean; restoreId? }`.
 - `canCreateTable(liveTablesForUser: number): Result<"TABLE_LIMIT">`, `canJoinAs(role: Role, counts: { drivers; spectators }, maxPlayers: number): Result<"TABLE_FULL" | "SPECTATORS_FULL">`, `nextHost(players: HostCandidate[], leavingSessionId: string): string | null`, `makeInviteCode(rand?: () => number): string`, `isInviteCode(s): boolean`, `TableListing` type.
@@ -96,6 +100,7 @@
 **Files:** Create `packages/shared/src/{maps.ts,materials.ts,movement.ts,messages.ts}`; Tests `packages/shared/test/{maps,movement,messages}.test.ts`
 
 **Interfaces — Produces:**
+
 - `MapId`, `MAP_IDS`, `TableMap` (spec §4.2; world centered: vertex `(i, j)` at `x = i − cellsX/2`, `z = j − cellsZ/2`), `MAPS`, `mapBounds(map): Bounds { minX; maxX; minZ; maxZ; minY; maxY }`, `rimPoint(map, edgeT, out): Vec3`, `nearestEdgeT(map, x, z): number`.
 - `MaterialId`, `MATERIALS: Record<MaterialId, MaterialPreset { id; displayName; reposeDeg; reposeQ; colors: { rock; dirt; sand }; particleColor; softness }>` with `reposeQ` 591 (sand), 800 (gravel), 1024 (damp dirt).
 - `Pose { x; y; z; qx; qy; qz; qw; vx; vy; vz }`, `validateMovement(prev: Pose, next: Pose, spec: VehicleSpec, bounds: Bounds, dtSec: number): { ok: true } | { ok: false; reason: "nan" | "bounds" | "overspeed" | "teleport" | "accel" }`.
@@ -110,6 +115,7 @@
 **Files:** Create `apps/server/src/{config.ts,logger.ts,auth.ts}`, `apps/server/src/game/{password.ts,tableRegistry.ts}`; Tests `apps/server/test/{auth,password,tableRegistry}.test.ts`
 
 **Interfaces — Produces:**
+
 - `loadConfig(env): ServerConfig { port; jwtSecret; allowedOrigins: string[]; dataDir; logLevel }` (secret ≥ 32 chars).
 - `createLogger(level, bindings?): Logger { debug; info; warn; error; child(bindings) }` — JSON lines to stdout.
 - `verifyGameToken(token: string, secret: string): Promise<GameUser>` throws `AuthError(code: "missing" | "invalid" | "expired")`; checks issuer, audience, alg HS256, claims schema, drops disallowed avatar.
@@ -125,6 +131,7 @@
 **Files:** Create `apps/server/src/rooms/{schema.ts,AuthedLobbyRoom.ts,TableRoom.ts}`, `apps/server/src/game/MovementGuard.ts`, `apps/server/src/server.ts`, `apps/server/src/http/routes.ts`; Modify `apps/server/src/index.ts`; Test `apps/server/test/tableRoom.test.ts`, `apps/server/test/movementGuard.test.ts`
 
 **Interfaces:**
+
 - Consumes: Tasks 2–5.
 - Produces: `createGameServer(config, deps: { logger; store?: SnapshotStore }): Server`; room names `"lobby"`, `"table"`; `TableState`/`PlayerState` schema (spec §5.2); join options `{ role: Role; password?: string; vehicle?: VehicleId; livery?: Livery; settings?: TableSettings (create only) }`; error codes thrown from onAuth/onCreate: `UNAUTHORIZED`, `TABLE_LIMIT`, `BAD_SETTINGS`, `BAD_PASSWORD`, `BANNED`, `TABLE_FULL`, `SPECTATORS_FULL`.
 - `MovementGuard { constructor(spec, bounds); reset(pose, nowMs); accept(next: Pose, nowMs): { ok: true } | { ok: false; correction: Pose | null } }` — correction after 3 consecutive failures.
@@ -138,6 +145,7 @@
 **Files:** Create `apps/web/src/auth.ts`, `apps/web/src/proxy.ts`, `apps/web/src/app/api/auth/[...nextauth]/route.ts`, `apps/web/src/app/api/game-token/route.ts`, `apps/web/src/lib/gameToken.ts`, `apps/web/src/lib/env.ts`; Test `apps/web/test/gameToken.test.ts`
 
 **Interfaces — Produces:**
+
 - `mintGameToken(user: GameUser, secret: string, nowSec?: number): Promise<string>` (HS256, iss/aud from shared, exp now+300).
 - `auth()`, `signIn`, `signOut`, `handlers` from Auth.js; `devLoginEnabled(): boolean`.
 - `GET /api/game-token` → `{ token, user: GameUser }` or 401.
@@ -152,6 +160,7 @@
 **Files:** Create `apps/web/src/app/globals.css` (tokens), `apps/web/src/app/{layout.tsx,page.tsx}`, `apps/web/src/app/cafe/page.tsx`, `apps/web/src/ui/common/{Logo.tsx,Avatar.tsx,Button.tsx,Dialog.tsx,Field.tsx}`, `apps/web/src/ui/cafe/{CafeScene.tsx,Chalkboard.tsx,CreateTableDialog.tsx,JoinByCodeDialog.tsx,PasswordDialog.tsx,ProfileDialog.tsx,ChallengeBanner.tsx,Radio.tsx,SavedTables.tsx}`, `apps/web/src/net/{gameClient.ts,useLobby.ts,pendingRoom.ts}`, `apps/web/src/state/profileStore.ts`
 
 **Interfaces — Produces:**
+
 - `getGameClient(): Promise<Client>` (sets `client.auth.token` from `/api/game-token`, refreshes when < 60 s left).
 - `useLobby(): { tables: TableRow[]; status; ping }`.
 - `pendingRoom.set(room)` / `take(roomId)` hand-off of an already-joined room to `/table/[roomId]`.
@@ -165,6 +174,7 @@
 **Files:** Create `apps/web/src/game/loop/{GameLoop.ts,LoopDriver.tsx}`, `apps/web/src/game/{Game.tsx,runtime.ts}`, `apps/web/src/game/input/{controls.ts,InputSystem.ts,touchInput.ts}`, `apps/web/src/game/world/{World.tsx,Tabletop.tsx,Props.tsx,Lighting.tsx,Backdrop.tsx}`, `apps/web/src/game/vehicles/models/{VehicleModel.ts,parts.ts,DumpTruckModel.ts,index.ts}`, `apps/web/src/game/vehicles/{WheeledController.ts,ToolRig.ts,LocalVehicle.tsx}`, `apps/web/src/game/camera/CameraRig.ts`, `apps/web/src/app/table/[roomId]/{page.tsx,TableClient.tsx}`, `apps/web/src/state/{settingsStore.ts,uiStore.ts,hudStore.ts}`; Test `apps/web/test/gameLoop.test.ts`, `apps/web/test/controls.test.ts`
 
 **Interfaces — Produces:**
+
 - `PHASES = ["inputs","player:pre-physics","vehicle:pre-physics","terrain:colliders","physics","vehicle:post-physics","network:send","network:interpolate","terrain:apply","camera","visuals","audio","render"] as const`; `class GameLoop { register(phase, system: { name; update(ctx: FrameContext): void }, order?: number): () => void; tick(dt: number): void; readonly stats }`; `FrameContext { dt; time; frame }`.
 - `InputState { drive: { x; y }; handbrake; tool: [n,n,n,n]; pressed: Set<Action> (edge-triggered this frame) }`; `BINDINGS: Record<Action, KeyBinding[]>`; `toolAxisKeys(axis): [string, string]`.
 - `VehicleModel` (spec §7.3) + `createVehicleModel(id, livery): VehicleModel`.
@@ -188,6 +198,7 @@
 **Files:** Create `apps/web/src/net/{tableSession.ts,InterpBuffer.ts,clock.ts}`, `apps/web/src/game/vehicles/RemoteVehicles.tsx`, `apps/web/src/state/sessionStore.ts`; Test `apps/web/test/interpBuffer.test.ts`
 
 **Interfaces — Produces:**
+
 - `joinTable(roomId, opts) / createTable(settings) / reconnectTable(token)` → `TableSession { room; sessionId; send(type, payload); leave(); on(event, cb) }`.
 - `class InterpBuffer { push(tServer: number, pose: Pose, joints: ArrayLike<number>): void; sample(tRender: number, outPose: Pose, outJoints: number[]): boolean }` (ring buffer, 32 samples, slerp).
 - `ServerClock { observe(serverMs, localMs); toServer(localMs) }`.
@@ -212,6 +223,7 @@
 **Files:** Create `packages/shared/src/terrain.ts`; Test `packages/shared/test/terrain.test.ts`
 
 **Interfaces — Produces:**
+
 - `HEIGHT_Q_PER_M = 1024`, `CHUNK_CELLS = 32`, `CHUNK_VERTS = 33`, `toQ(m)`, `fromQ(q)`, `quantaToM3(q)`, `m3ToQuanta(m3)`.
 - `VertexRect { i0; j0; i1; j1 }` (inclusive, global vertex coords).
 - `class Terrain { cellsX; cellsZ; chunksX; chunksZ; maxQ; chunks: TerrainChunk[]; getQ(i,j); setQ(i,j,q); bedrockQ(i,j); heightAt(x,z); vertexOf(x): number; markDirty(rect); takeDirtyChunks(out: TerrainChunk[]): number; hash(): number; clone(): Terrain; copyFrom(t) }`, `TerrainChunk { cx; cz; heights: Float32Array; bedrock: Float32Array; version; dirty; dirtyRect: VertexRect | null }`.
@@ -228,6 +240,7 @@
 **Files:** Create `packages/shared/src/{terrainOps.ts,snapshot.ts}`; Tests `packages/shared/test/{terrainOps,replay,snapshot}.test.ts`
 
 **Interfaces — Produces:**
+
 - `terrainIntentSchema` (discriminated union, cm integers): `dig { x, z, r, d }`, `release { x, z }`, `dump { x, z }`, `push { x, z, r, h, fx, fz }`.
 - `OP = { DIG: 1, FILL: 2, PUSH: 3 }`, `AppliedOp { seq; code; by; x; z; r; a; b; c; d; resultQ }` where per code: DIG `a = depthQ, b = limitQ`; FILL `a = volumeQ`; PUSH `a = targetQ, b = fx, c = fz`.
 - `encodeOp(op): WireOp` (`number|string` tuple), `decodeOp(w): AppliedOp`, `applyTerrainOp(t, op, material): number` (brush + repose; returns resultQ).
@@ -242,6 +255,7 @@
 **Files:** Create `apps/server/src/game/terrainValidation.ts`; Test `apps/server/test/terrainValidation.test.ts`
 
 **Interfaces — Produces:**
+
 - `validateIntent(intent: TerrainIntent, ctx: IntentContext): { ok: true } | { ok: false; reason: "rate" | "tool" | "reach" | "radius" | "depth" | "volume" | "angle" | "blade" | "no-vehicle" }`, `IntentContext { spec: VehicleSpec | null; pose: Pose | null; joints: ArrayLike<number>; loadQ: number; bucket: TokenBucket }`.
 
 - [ ] Step 1: Tests: legal excavator dig at 6 m accepted; dig at 15 m rejected `reach`; 11th op inside one second rejected `rate`; dig with full bucket rejected `volume`; release with empty bucket rejected `volume`; dump truck dump with bed at 20° rejected `angle`; dig from a dump truck rejected `tool`; radius beyond spec rejected `radius`; bulldozer push with blade 2 m below vehicle rejected `blade`.
@@ -253,6 +267,7 @@
 **Files:** Create `apps/server/src/game/TerrainAuthority.ts`, `apps/server/src/persistence/SnapshotStore.ts`; Modify `TableRoom.ts`, `http/routes.ts`; Tests `apps/server/test/{terrainAuthority,snapshotStore}.test.ts`, extend `tableRoom.test.ts`
 
 **Interfaces — Produces:**
+
 - `TerrainAuthority { constructor(map, material, opts: { logSize: 512 }); readonly seq; handle(intent, actor: Actor, trucks: TruckInfo[]): { ok: true; ops: AppliedOp[]; transfers: Transfer[] } | { ok: false; reason }; snapshot(): Uint8Array; opsSince(seq): AppliedOp[] | null; reset(): AppliedOp[]; restore(bytes) }`.
 - `SnapshotStore { save(meta: SavedTableMeta, bytes): Promise<Result<"TOO_LARGE" | "USER_LIMIT">>; load(tableId, userId): Promise<Uint8Array | null>; list(userId): Promise<SavedTableMeta[]>; remove(tableId, userId): Promise<boolean>; sweep(): Promise<number> }`, `createFileSnapshotStore(dir, now?)`, `createMemorySnapshotStore(now?)`.
 

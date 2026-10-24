@@ -18,23 +18,23 @@ Out of scope (listed as next ideas in the README): server-authoritative physics,
 
 ## 2. Decisions and conflict resolutions
 
-| Topic | Decision |
-|---|---|
-| Naming | Build directly as `project-dirtyworks`, npm scope `@dirtyworks`. No warehouse-sim stage. |
-| Maps | The four tables replace the four original maps: Backyard Sandbox, Mini Quarry (fully built), Construction Yard, Beach Dig Site. |
-| Table size | Per-map in `maps.ts`. Mini Quarry 128×128 m (4×4 chunks), others 96×96 m (3×3 chunks). 1 m cells, 32×32-cell chunks. Sizes must be multiples of 32. Physics stays real scale. |
-| Max players | 2–8 drivers per table, plus up to 8 spectators. |
-| Display names | Google profile name only (brief 3 overrides brief 1's "edit once"). The profile dialog edits livery only. |
-| Colyseus client | `@colyseus/sdk` 0.18 (the brief's `colyseus.js` is frozen at 0.16 and incompatible with server 0.18). |
-| Server browser | Colyseus `LobbyRoom` realtime listing (0.18 has no `getAvailableRooms`). |
-| Tool keys | G is the garage. Tool axes: Q/E, R/F, I/K, J/L. All remappable in `controls.ts`. |
-| Camera | V cycles Operator (default) → Chase → Free orbit. |
-| Dev login | Auth.js Credentials "guest" provider, registered only when `AUTH_DEV_LOGIN=true` and `NODE_ENV !== "production"`. Production is Google-only. |
-| Terrain sync | Approach A: server applies ops in order and owns bucket/bed loads; clients apply only server-broadcast ops (including their own). |
-| Runtime | Node 24 LTS (`engines.node >=22.12`). TypeScript 6.0.x (typescript-eslint does not support TS 7 yet). |
-| Saved tables | Compressed snapshot files on server disk under `DATA_DIR`. Needs a volume on Fly.io/Railway. |
-| Challenges | 7 static daily challenges, manual "I did it!" check-off stored in localStorage. No auto-detection yet. |
-| Audio | `playSound`/`setLoop` hook layer; default implementation is a tiny WebAudio oscillator synth (horn, servo whine, engine hum, cafe hum). No audio files. Cafe radio shows 3 channel names, no audio. |
+| Topic           | Decision                                                                                                                                                                                            |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Naming          | Build directly as `project-dirtyworks`, npm scope `@dirtyworks`. No warehouse-sim stage.                                                                                                            |
+| Maps            | The four tables replace the four original maps: Backyard Sandbox, Mini Quarry (fully built), Construction Yard, Beach Dig Site.                                                                     |
+| Table size      | Per-map in `maps.ts`. Mini Quarry 128×128 m (4×4 chunks), others 96×96 m (3×3 chunks). 1 m cells, 32×32-cell chunks. Sizes must be multiples of 32. Physics stays real scale.                       |
+| Max players     | 2–8 drivers per table, plus up to 8 spectators.                                                                                                                                                     |
+| Display names   | Google profile name only (brief 3 overrides brief 1's "edit once"). The profile dialog edits livery only.                                                                                           |
+| Colyseus client | `@colyseus/sdk` 0.18 (the brief's `colyseus.js` is frozen at 0.16 and incompatible with server 0.18).                                                                                               |
+| Server browser  | Colyseus `LobbyRoom` realtime listing (0.18 has no `getAvailableRooms`).                                                                                                                            |
+| Tool keys       | G is the garage. Tool axes: Q/E, R/F, I/K, J/L. All remappable in `controls.ts`.                                                                                                                    |
+| Camera          | V cycles Operator (default) → Chase → Free orbit.                                                                                                                                                   |
+| Dev login       | Auth.js Credentials "guest" provider, registered only when `AUTH_DEV_LOGIN=true` and `NODE_ENV !== "production"`. Production is Google-only.                                                        |
+| Terrain sync    | Approach A: server applies ops in order and owns bucket/bed loads; clients apply only server-broadcast ops (including their own).                                                                   |
+| Runtime         | Node 24 LTS (`engines.node >=22.12`). TypeScript 6.0.x (typescript-eslint does not support TS 7 yet).                                                                                               |
+| Saved tables    | Compressed snapshot files on server disk under `DATA_DIR`. Needs a volume on Fly.io/Railway.                                                                                                        |
+| Challenges      | 7 static daily challenges, manual "I did it!" check-off stored in localStorage. No auto-detection yet.                                                                                              |
+| Audio           | `playSound`/`setLoop` hook layer; default implementation is a tiny WebAudio oscillator synth (horn, servo whine, engine hum, cafe hum). No audio files. Cafe radio shows 3 channel names, no audio. |
 
 ## 3. Repository layout
 
@@ -68,26 +68,26 @@ Dev: `typescript`, `vitest`, `@colyseus/testing`, `tsx`, `esbuild`, `concurrentl
 
 All modules are pure TypeScript with no three/rapier/DOM imports, so server and client run identical logic.
 
-| Module | Contents |
-|---|---|
-| `constants.ts` | Rates and limits: `NET_SEND_HZ=20`, `INTERP_DELAY_MS=100`, `RECONNECT_SECONDS=20`, `MAX_TABLES_PER_USER=3`, `CHAT_MAX_LEN=200`, `CHAT_HISTORY=50`, `TERRAIN_OPS_PER_SEC=10`, `MAX_SPECTATORS=8`, token TTL 300 s. |
-| `math.ts` | Minimal `Vec3`/`Quat` plain-object helpers (allocation-free variants with `out` params). |
-| `vehicles.ts` | `VehicleSpec` data for excavator, dump truck, bulldozer, wheel loader + zod schema + `validateVehicleSpec`, `clampJoints`, `toolTip(spec, pose, joints, out)` forward kinematics. |
-| `maps.ts` | `TableMap` definitions (see §4.2) + zod schema. |
-| `materials.ts` | Material presets: sand, gravel, damp dirt (§4.3). |
-| `terrain.ts` | Chunked heightmap, base terrain generation, `applyBrush`, angle-of-repose relaxation, hashing (§6). |
-| `terrainOps.ts` | Op types, quantization, op validation rules shared by server (§6.4). |
-| `snapshot.ts` | Snapshot encode/decode with fflate (§6.5). |
-| `movement.ts` | `validateMovement(prev, next, spec, map, dtSec)` → `{ ok, reason, corrected }` (§5.3). |
-| `rateLimit.ts` | Token bucket with injectable clock (chat, emotes, terrain ops, state updates). |
-| `tables.ts` | `TableSettings` zod schema (name, map, vibe, rule, maxPlayers, visibility, password, material, keepForLater), `canCreateTable`, `canJoinAs(role, counts, settings)`, invite code format, host succession. |
-| `livery.ts` | Allowed colors (8 named hex values), decals (`none`, `stripes`, `number`, `checker`), number 0–99, zod schema. |
-| `emotes.ts` | Emote ids (`thumbs-up`, `laugh`, `nice-dig`, `my-turn`, `horn`), key mapping, rate limit config. |
-| `chat.ts` | `sanitizeChat` (trim, strip control chars, 200 chars), `profanityFilter` stub hook. |
-| `challenges.ts` | 7 challenges + `challengeForDate(date)` (UTC day index mod 7). |
-| `messages.ts` | Message type names and zod schemas for every client→server and server→client message (§5.2). |
-| `battery.ts` | `drainBattery`, `batterySpeedFactor`, charging-station radius. |
-| `auth.ts` | Game token claim schema (`sub`, `name`, `avatar`), avatar URL allowlist (`*.googleusercontent.com`). |
+| Module          | Contents                                                                                                                                                                                                          |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `constants.ts`  | Rates and limits: `NET_SEND_HZ=20`, `INTERP_DELAY_MS=100`, `RECONNECT_SECONDS=20`, `MAX_TABLES_PER_USER=3`, `CHAT_MAX_LEN=200`, `CHAT_HISTORY=50`, `TERRAIN_OPS_PER_SEC=10`, `MAX_SPECTATORS=8`, token TTL 300 s. |
+| `math.ts`       | Minimal `Vec3`/`Quat` plain-object helpers (allocation-free variants with `out` params).                                                                                                                          |
+| `vehicles.ts`   | `VehicleSpec` data for excavator, dump truck, bulldozer, wheel loader + zod schema + `validateVehicleSpec`, `clampJoints`, `toolTip(spec, pose, joints, out)` forward kinematics.                                 |
+| `maps.ts`       | `TableMap` definitions (see §4.2) + zod schema.                                                                                                                                                                   |
+| `materials.ts`  | Material presets: sand, gravel, damp dirt (§4.3).                                                                                                                                                                 |
+| `terrain.ts`    | Chunked heightmap, base terrain generation, `applyBrush`, angle-of-repose relaxation, hashing (§6).                                                                                                               |
+| `terrainOps.ts` | Op types, quantization, op validation rules shared by server (§6.4).                                                                                                                                              |
+| `snapshot.ts`   | Snapshot encode/decode with fflate (§6.5).                                                                                                                                                                        |
+| `movement.ts`   | `validateMovement(prev, next, spec, map, dtSec)` → `{ ok, reason, corrected }` (§5.3).                                                                                                                            |
+| `rateLimit.ts`  | Token bucket with injectable clock (chat, emotes, terrain ops, state updates).                                                                                                                                    |
+| `tables.ts`     | `TableSettings` zod schema (name, map, vibe, rule, maxPlayers, visibility, password, material, keepForLater), `canCreateTable`, `canJoinAs(role, counts, settings)`, invite code format, host succession.         |
+| `livery.ts`     | Allowed colors (8 named hex values), decals (`none`, `stripes`, `number`, `checker`), number 0–99, zod schema.                                                                                                    |
+| `emotes.ts`     | Emote ids (`thumbs-up`, `laugh`, `nice-dig`, `my-turn`, `horn`), key mapping, rate limit config.                                                                                                                  |
+| `chat.ts`       | `sanitizeChat` (trim, strip control chars, 200 chars), `profanityFilter` stub hook.                                                                                                                               |
+| `challenges.ts` | 7 challenges + `challengeForDate(date)` (UTC day index mod 7).                                                                                                                                                    |
+| `messages.ts`   | Message type names and zod schemas for every client→server and server→client message (§5.2).                                                                                                                      |
+| `battery.ts`    | `drainBattery`, `batterySpeedFactor`, charging-station radius.                                                                                                                                                    |
+| `auth.ts`       | Game token claim schema (`sub`, `name`, `avatar`), avatar URL allowlist (`*.googleusercontent.com`).                                                                                                              |
 
 ### 4.1 Vehicles
 
@@ -97,12 +97,12 @@ Joint: `{ id, label, axis, min, max, speed, rest, node, input }` where `node` is
 
 Tool: `{ kind: "bucket" | "bed" | "blade", capacityM3, reach, brushRadius, maxDigDepth, dumpAngle? }`.
 
-| Vehicle | Drive | Joints (keys) | Tool |
-|---|---|---|---|
-| Excavator | tracked | cab swing (Q/E), boom (R/F), stick (I/K), bucket curl (J/L) | bucket 1.2 m³, reach 9 m |
-| Dump truck | wheeled | bed tilt (R/F) | bed 12 m³, dumps above 40° |
-| Bulldozer | tracked | blade height (R/F), blade tilt (I/K) | blade, reach 4 m |
-| Wheel loader | wheeled, articulated | arm lift (R/F), bucket tilt (I/K) | bucket 2.5 m³, reach 5 m |
+| Vehicle      | Drive                | Joints (keys)                                               | Tool                       |
+| ------------ | -------------------- | ----------------------------------------------------------- | -------------------------- |
+| Excavator    | tracked              | cab swing (Q/E), boom (R/F), stick (I/K), bucket curl (J/L) | bucket 1.2 m³, reach 9 m   |
+| Dump truck   | wheeled              | bed tilt (R/F)                                              | bed 12 m³, dumps above 40° |
+| Bulldozer    | tracked              | blade height (R/F), blade tilt (I/K)                        | blade, reach 4 m           |
+| Wheel loader | wheeled, articulated | arm lift (R/F), bucket tilt (I/K)                           | bucket 2.5 m³, reach 5 m   |
 
 ### 4.2 Table maps
 
@@ -115,11 +115,11 @@ Base terrain generators use only `+ − × ÷`, `Math.sqrt` and an integer hash 
 
 ### 4.3 Material presets
 
-| Preset | Repose angle | Look | Particles |
-|---|---|---|---|
-| sand | 30° | pale warm sand / light dirt / grey rock | pale tan |
-| gravel | 38° | grey-brown gravel blend | grey |
-| damp dirt | 45° | dark brown | dark brown |
+| Preset    | Repose angle | Look                                    | Particles  |
+| --------- | ------------ | --------------------------------------- | ---------- |
+| sand      | 30°          | pale warm sand / light dirt / grey rock | pale tan   |
+| gravel    | 38°          | grey-brown gravel blend                 | grey       |
+| damp dirt | 45°          | dark brown                              | dark brown |
 
 Each preset stores the repose limit as a precomputed integer of height quanta per cell (no runtime trig), three blend colors, particle color, and a dig softness multiplier.
 
@@ -155,25 +155,25 @@ Room state (`@colyseus/schema` v5 `schema()` API, patch rate 50 ms):
 
 Messages (all validated with zod via Colyseus 0.18 message validation, all rate limited per client):
 
-| Client → server | Payload | Limit |
-|---|---|---|
-| `state` | pose, velocity, joints, vehicle, edgeT, battery, client time | 25/s |
-| `spawn` | vehicle id, livery | 2/s |
-| `terrainOp` | `dig` / `release` / `dump` / `push` with quantized params | 10/s |
-| `terrainResync` | `fromSeq` | 1/s |
-| `chat` | text | 1/s, burst 3 |
-| `emote` | emote id | 1 per 2 s, burst 3 |
-| `livery` | livery | 1/s |
-| `report` | target session, reason | 1 per 10 s |
-| `pong` | ping id | 1/s |
-| host-only | `kick`, `ban`, `closeTable`, `setDayNight`, `terrainReset`, `setKeepForLater` | 2/s |
+| Client → server | Payload                                                                       | Limit              |
+| --------------- | ----------------------------------------------------------------------------- | ------------------ |
+| `state`         | pose, velocity, joints, vehicle, edgeT, battery, client time                  | 25/s               |
+| `spawn`         | vehicle id, livery                                                            | 2/s                |
+| `terrainOp`     | `dig` / `release` / `dump` / `push` with quantized params                     | 10/s               |
+| `terrainResync` | `fromSeq`                                                                     | 1/s                |
+| `chat`          | text                                                                          | 1/s, burst 3       |
+| `emote`         | emote id                                                                      | 1 per 2 s, burst 3 |
+| `livery`        | livery                                                                        | 1/s                |
+| `report`        | target session, reason                                                        | 1 per 10 s         |
+| `pong`          | ping id                                                                       | 1/s                |
+| host-only       | `kick`, `ban`, `closeTable`, `setDayNight`, `terrainReset`, `setKeepForLater` | 2/s                |
 
-| Server → client | Payload |
-|---|---|
-| `welcome` | your role, table seq, snapshot bytes, chat history (last 50) |
-| `terrainOp` | compact op: `[seq, kind, params…, bySession, appliedQuanta]` |
-| `terrainSnapshot` | resync reply: seq + snapshot bytes |
-| `correction` | last valid pose after a rejected movement |
+| Server → client                                                                         | Payload                                                      |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `welcome`                                                                               | your role, table seq, snapshot bytes, chat history (last 50) |
+| `terrainOp`                                                                             | compact op: `[seq, kind, params…, bySession, appliedQuanta]` |
+| `terrainSnapshot`                                                                       | resync reply: seq + snapshot bytes                           |
+| `correction`                                                                            | last valid pose after a rejected movement                    |
 | `chat`, `emote`, `notice` (join/leave/kick/host change), `ping`, `tableClosed`, `error` |
 
 Hard limits: messages failing zod are dropped and logged; repeated violations (20 in 10 s) disconnect the client. Colyseus `maxMessagesPerSecond = 60` as a backstop.
@@ -241,13 +241,13 @@ Client-authoritative movement with server validation:
 
 ### 7.1 Routes
 
-| Route | Purpose |
-|---|---|
-| `/` | Landing: logo, tagline, Google sign-in (+ dev guest form). |
-| `/cafe` | Lobby: illustrated cafe, chalkboard table browser, create table, join by code, saved tables, daily challenge banner, radio, profile (livery). |
-| `/table/[roomId]` | Game: client-only canvas (`dynamic(..., { ssr: false })`) + HUD. `?as=spectator` joins as spectator. |
-| `/api/auth/[...nextauth]` | Auth.js handlers. |
-| `/api/game-token` | Game JWT minting. |
+| Route                     | Purpose                                                                                                                                       |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                       | Landing: logo, tagline, Google sign-in (+ dev guest form).                                                                                    |
+| `/cafe`                   | Lobby: illustrated cafe, chalkboard table browser, create table, join by code, saved tables, daily challenge banner, radio, profile (livery). |
+| `/table/[roomId]`         | Game: client-only canvas (`dynamic(..., { ssr: false })`) + HUD. `?as=spectator` joins as spectator.                                          |
+| `/api/auth/[...nextauth]` | Auth.js handlers.                                                                                                                             |
+| `/api/game-token`         | Game JWT minting.                                                                                                                             |
 
 ### 7.2 GameLoop
 
@@ -285,20 +285,20 @@ Hot paths reuse preallocated `Vector3`/`Quaternion`/`Matrix4` scratch objects; n
 
 ### 7.4 Controls (`controls.ts`)
 
-| Action | Keyboard | Gamepad | Touch |
-|---|---|---|---|
-| Drive / steer | WASD, arrows | left stick | transmitter left stick |
-| Handbrake | Space | A / Cross | button |
-| Tool axes 0–3 | Q/E, R/F, I/K, J/L | right stick X/Y, triggers, bumpers | transmitter right stick + 2 rocker buttons |
-| Horn | H | Y / Triangle | button |
-| Garage | G | Start | button |
-| Chat | Enter | — | button |
-| Player list | Tab | Select | button |
-| Camera mode | V | right stick click | button |
-| Emotes | 1–5 | d-pad | emote wheel button |
-| Spectate prev/next | ← / → (spectators only) | LB / RB | swipe buttons |
-| Photo mode | P | — | button |
-| Perf overlay | F3 | — | — |
+| Action             | Keyboard                | Gamepad                            | Touch                                      |
+| ------------------ | ----------------------- | ---------------------------------- | ------------------------------------------ |
+| Drive / steer      | WASD, arrows            | left stick                         | transmitter left stick                     |
+| Handbrake          | Space                   | A / Cross                          | button                                     |
+| Tool axes 0–3      | Q/E, R/F, I/K, J/L      | right stick X/Y, triggers, bumpers | transmitter right stick + 2 rocker buttons |
+| Horn               | H                       | Y / Triangle                       | button                                     |
+| Garage             | G                       | Start                              | button                                     |
+| Chat               | Enter                   | —                                  | button                                     |
+| Player list        | Tab                     | Select                             | button                                     |
+| Camera mode        | V                       | right stick click                  | button                                     |
+| Emotes             | 1–5                     | d-pad                              | emote wheel button                         |
+| Spectate prev/next | ← / → (spectators only) | LB / RB                            | swipe buttons                              |
+| Photo mode         | P                       | —                                  | button                                     |
+| Perf overlay       | F3                      | —                                  | —                                          |
 
 The bottom HUD shows the current vehicle's tool labels (e.g. "R/F Boom up/down").
 
