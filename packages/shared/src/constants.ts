@@ -32,3 +32,6 @@ export const SAVED_TABLES_PER_USER = 5;
 export const SAVED_TABLE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const GRAVITY = 9.81;
+
+/** Terrain cells (1 m) per chunk edge; table sizes must be multiples of this. */
+export const CHUNK_CELLS = 32;
