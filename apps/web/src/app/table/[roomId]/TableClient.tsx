@@ -1,6 +1,6 @@
 "use client";
 
-import type { GameUser } from "@dirtyworks/shared";
+import type { GameUser, VehicleId } from "@dirtyworks/shared";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -93,6 +93,20 @@ export function TableClient({
     () => (mapId && materialId ? new GameRuntime(mapId, materialId) : null),
     [mapId, materialId],
   );
+
+  // Development-only handle for end-to-end scripts (never shipped in production builds).
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return;
+    const w = window as unknown as { __dirtyworks?: unknown };
+    w.__dirtyworks = {
+      runtime,
+      spawn: (vehicle: VehicleId) =>
+        sessionRef.current?.spawn(vehicle, useProfile.getState().livery),
+    };
+    return () => {
+      delete w.__dirtyworks;
+    };
+  }, [runtime]);
 
   if (joinError) return <TableMessage title="Couldn't sit down" body={joinError} />;
   if (status === "closed") return <TableMessage title="Table closed" body={closedReason} />;

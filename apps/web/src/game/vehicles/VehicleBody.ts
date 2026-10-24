@@ -18,6 +18,8 @@ export function createVehicleBody(
   pose: Pose,
   clearance: number,
   friction: number,
+  /** Tracked vehicles own their grip in the controller; ground friction must not fight it. */
+  frictionless = false,
 ): VehicleBody {
   const body = world.createRigidBody(
     rapier.RigidBodyDesc.dynamic()
@@ -33,7 +35,10 @@ export function createVehicleBody(
   const m = spec.mass;
   const desc = rapier.ColliderDesc.roundCuboid(s.x / 2 - 0.1, s.y / 2 - 0.1, s.z / 2 - 0.1, 0.1)
     .setTranslation(0, centerY, 0)
-    .setFriction(friction)
+    .setFriction(frictionless ? 0 : friction)
+    .setFrictionCombineRule(
+      frictionless ? rapier.CoefficientCombineRule.Min : rapier.CoefficientCombineRule.Average,
+    )
     .setRestitution(0.05)
     .setMassProperties(
       m,

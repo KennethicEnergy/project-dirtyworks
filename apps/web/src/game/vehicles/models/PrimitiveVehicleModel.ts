@@ -279,9 +279,11 @@ export abstract class PrimitiveVehicleModel implements VehicleModel {
 
   private addAntenna(): void {
     const a = this.spec.antenna;
+    // Ride on a swinging cab when there is one, so the antenna never pokes through it.
+    const parent = this.nodes.cab ?? this.root;
     const mount = new Group();
-    mount.position.set(a.x, a.y, a.z);
-    this.root.add(mount);
+    mount.position.set(a.x - parent.position.x, a.y - parent.position.y, a.z - parent.position.z);
+    parent.add(mount);
     const led = new Mesh(this.track(new SphereGeometry(0.14, 10, 8)), this.ledMaterial);
     mount.add(led);
     const antenna = new Group();
@@ -345,6 +347,7 @@ export abstract class PrimitiveVehicleModel implements VehicleModel {
     this.paint.color.set(LIVERY_COLORS[livery.color].hex);
     if (this.decalPlates.length === 0) return;
     const texture = drawDecal(livery);
+    if (!texture) return;
     for (const plate of this.decalPlates) {
       const m = plate.material as MeshStandardMaterial;
       m.map = texture;
@@ -382,7 +385,9 @@ export abstract class PrimitiveVehicleModel implements VehicleModel {
 const decalColor = new Color();
 
 /** Livery decal drawn on a small canvas: paint background plus stripes, number or checkers. */
-function drawDecal(livery: Livery): CanvasTexture {
+function drawDecal(livery: Livery): CanvasTexture | null {
+  // No DOM (server render, unit tests): plates keep their plain material.
+  if (typeof document === "undefined") return null;
   const canvas = document.createElement("canvas");
   canvas.width = 256;
   canvas.height = 128;
