@@ -44,6 +44,7 @@ export interface RateConfig {
 
 /** Per-client limits for every client → server message type. */
 export const RATES = {
+  ready: { capacity: 3, refillPerSec: 0.5 },
   state: { capacity: 25, refillPerSec: 25 },
   spawn: { capacity: 2, refillPerSec: 2 },
   terrainOp: { capacity: 10, refillPerSec: 10 },

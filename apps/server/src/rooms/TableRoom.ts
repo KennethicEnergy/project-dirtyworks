@@ -204,7 +204,6 @@ export class TableRoom extends Room<{ state: TableState; metadata: TableListing 
     if (!this.state.hostId) this.state.hostId = client.sessionId;
     await this.setMetadata(this.listing());
     this.notice({ kind: "join", name: user.name, text: `${user.name} pulled up a chair.` }, client);
-    client.send(MSG.welcome, this.welcome(client, role));
     this.log.info("player joined", { userId: user.id, role });
   }
 
@@ -228,7 +227,6 @@ export class TableRoom extends Room<{ state: TableState; metadata: TableListing 
     const info = this.info.get(client.sessionId);
     if (info?.guard) info.guard.reset(info.guard.lastValid, this.deps.now());
     this.notice({ kind: "back", name: player.name, text: `${player.name} is back on the sticks.` });
-    client.send(MSG.welcome, this.welcome(client, (player.role as Role) ?? "driver"));
   }
 
   override async onLeave(client: Client) {
@@ -250,6 +248,11 @@ export class TableRoom extends Room<{ state: TableState; metadata: TableListing 
   // ─── messages ────────────────────────────────────────────────────────────
 
   private registerMessages(): void {
+    // Welcome is pulled, not pushed: messages sent before the client registers handlers are lost.
+    this.handle(MSG.ready, "ready", emptyMsgSchema, (client, _msg, info) => {
+      client.send(MSG.welcome, this.welcome(client, info.role));
+    });
+
     this.handle(MSG.state, "state", stateMsgSchema, (client, msg, info) => {
       const player = this.state.players.get(client.sessionId);
       if (!player || !info.guard || !player.vehicle || msg.v !== player.vehicle) return;
@@ -456,6 +459,9 @@ export class TableRoom extends Room<{ state: TableState; metadata: TableListing 
       sessionId: client.sessionId,
       role,
       tableId: this.state.tableId,
+      tableName: this.settings.name,
+      mapId: this.settings.mapId,
+      materialId: this.materialId,
       inviteCode: this.inviteCode,
       seq: 0,
       snapshot: new Uint8Array(0),

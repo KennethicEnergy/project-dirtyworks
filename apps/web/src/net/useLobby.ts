@@ -71,6 +71,8 @@ export function useLobby(): {
           setTables((prev) => prev.filter((t) => t.roomId !== roomId)),
         );
         joined.onLeave(() => !cancelled && setStatus("error"));
+        // The first listing can arrive before these handlers exist; ask for it again.
+        joined.send("filter", {});
       })
       .catch((err) => {
         if (cancelled) return;

@@ -210,6 +210,25 @@ describe("table auth and creation", () => {
   });
 });
 
+describe("handshake", () => {
+  it("sends the welcome only after the client says it is ready", async () => {
+    const { room, server } = await host();
+    let early = false;
+    room.onMessage(MSG.welcome, () => (early = true));
+    await sleep(150);
+    expect(early).toBe(false);
+    const welcome = room.waitForMessage(MSG.welcome);
+    room.send(MSG.ready);
+    expect(await welcome).toMatchObject({
+      sessionId: room.sessionId,
+      role: "driver",
+      tableName: "Test table",
+      mapId: "mini-quarry",
+      inviteCode: server.inviteCode,
+    });
+  });
+});
+
 describe("driving", () => {
   it("accepts a legal state update after spawning", async () => {
     const { room, server } = await host();

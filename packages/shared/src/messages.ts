@@ -1,12 +1,15 @@
 /** Message names, payload schemas (client → server) and payload types (server → client). */
 import { z } from "zod";
 import { EMOTE_IDS, type EmoteId } from "./emotes";
+import type { MapId, MaterialId } from "./ids";
 import { liverySchema } from "./livery";
 import type { Role } from "./tables";
 import { vehicleIdSchema, type VehicleId } from "./vehicles";
 
 export const MSG = {
   // client → server
+  /** Sent once handlers are registered (and after a reconnect); the server answers with welcome. */
+  ready: "ready",
   state: "state",
   spawn: "spawn",
   terrainOp: "terrainOp",
@@ -88,6 +91,9 @@ export interface Welcome {
   sessionId: string;
   role: Role;
   tableId: string;
+  tableName: string;
+  mapId: MapId;
+  materialId: MaterialId;
   inviteCode: string;
   /** Terrain op sequence number the snapshot is at. */
   seq: number;

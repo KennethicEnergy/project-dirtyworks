@@ -111,7 +111,7 @@ export const VEHICLES: Record<VehicleId, VehicleSpec> = {
     drive: "tracked",
     articulated: false,
     mass: 16000,
-    chassis: { size: vec3(3, 1.1, 4.6), comOffset: vec3(0, -0.3, 0) },
+    chassis: { size: vec3(3, 2.6, 4.6), comOffset: vec3(0, -0.6, 0) },
     tracks: { width: 0.6, length: 4.4, gauge: 2.4 },
     maxSpeed: 3.5,
     maxAccel: 2.5,
@@ -198,7 +198,7 @@ export const VEHICLES: Record<VehicleId, VehicleSpec> = {
     drive: "wheeled",
     articulated: false,
     mass: 12000,
-    chassis: { size: vec3(2.8, 1.3, 7.2), comOffset: vec3(0, -0.4, 0.3) },
+    chassis: { size: vec3(2.8, 2.2, 7.2), comOffset: vec3(0, -0.6, 0.3) },
     wheels: [
       { x: 1.25, y: 1.1, z: 2.4, radius: 0.75, steer: 1, drive: false },
       { x: -1.25, y: 1.1, z: 2.4, radius: 0.75, steer: 1, drive: false },
@@ -246,7 +246,7 @@ export const VEHICLES: Record<VehicleId, VehicleSpec> = {
     drive: "tracked",
     articulated: false,
     mass: 15000,
-    chassis: { size: vec3(3, 1.4, 4.2), comOffset: vec3(0, -0.4, 0) },
+    chassis: { size: vec3(3, 2.4, 4.2), comOffset: vec3(0, -0.6, 0) },
     tracks: { width: 0.6, length: 3.8, gauge: 2.4 },
     maxSpeed: 4,
     maxAccel: 2.5,
@@ -299,7 +299,7 @@ export const VEHICLES: Record<VehicleId, VehicleSpec> = {
     drive: "wheeled",
     articulated: true,
     mass: 11000,
-    chassis: { size: vec3(2.6, 1.4, 6.4), comOffset: vec3(0, -0.4, -0.4) },
+    chassis: { size: vec3(2.6, 2.4, 6.4), comOffset: vec3(0, -0.6, -0.4) },
     wheels: [
       { x: 1.1, y: 1.15, z: 1.7, radius: 0.8, steer: 1, drive: true },
       { x: -1.1, y: 1.15, z: 1.7, radius: 0.8, steer: 1, drive: true },
@@ -551,4 +551,34 @@ export function toolTipWorld(
   out.y += pose.y;
   out.z += pose.z;
   return out;
+}
+
+/**
+ * Advances joints from the four tool control axes (−1..1) for `dt` seconds, in place, within
+ * limits. Returns hydraulic activity 0..1 (largest actual joint speed relative to its max).
+ */
+export function integrateJoints(
+  spec: VehicleSpec,
+  joints: number[],
+  axes: ArrayLike<number>,
+  dt: number,
+  speedScale = 1,
+): number {
+  let activity = 0;
+  const specs = spec.joints;
+  for (let i = 0; i < specs.length; i++) {
+    const j = specs[i]!;
+    const axis = axes[j.input] ?? 0;
+    const before = joints[i] ?? j.rest;
+    if (axis === 0 || dt <= 0) {
+      joints[i] = before;
+      continue;
+    }
+    const target = before + axis * j.inputSign * j.speed * speedScale * dt;
+    const after = target < j.min ? j.min : target > j.max ? j.max : target;
+    joints[i] = after;
+    const moved = Math.abs(after - before) / (j.speed * dt);
+    if (moved > activity) activity = moved;
+  }
+  return activity > 1 ? 1 : activity;
 }

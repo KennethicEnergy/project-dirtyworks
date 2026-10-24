@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { vec3, type Pose } from "../src/math";
 import {
   clampJoints,
+  integrateJoints,
   restJoints,
   toolTipLocal,
   toolTipWorld,
@@ -170,5 +171,32 @@ describe("tool kinematics", () => {
       const tip = toolTipLocal(spec, restJoints(spec), vec3());
       expect(Math.hypot(tip.x, tip.z), id).toBeLessThanOrEqual(spec.tool.reach);
     }
+  });
+});
+
+describe("integrateJoints", () => {
+  it("moves a joint at its speed in the pressed direction, honoring inputSign", () => {
+    const spec = VEHICLES.excavator;
+    const joints = restJoints(spec);
+    integrateJoints(spec, joints, [1, 0, 0, 0], 0.5);
+    // swing has inputSign -1 and speed 0.9 rad/s: E (+1) swings right (negative yaw).
+    expect(joints[0]).toBeCloseTo(-0.45);
+    expect(joints[1]).toBeCloseTo(spec.joints[1]!.rest);
+  });
+
+  it("stops at the joint limit", () => {
+    const spec = VEHICLES["dump-truck"];
+    const joints = restJoints(spec);
+    integrateJoints(spec, joints, [0, 1, 0, 0], 60);
+    expect(joints[0]).toBe(spec.joints[0]!.max);
+  });
+
+  it("reports how hard the hydraulics worked (0 when idle or pinned at a limit)", () => {
+    const spec = VEHICLES["dump-truck"];
+    const joints = restJoints(spec);
+    expect(integrateJoints(spec, joints, [0, 0, 0, 0], 0.1)).toBe(0);
+    expect(integrateJoints(spec, joints, [0, 0.5, 0, 0], 0.1)).toBeCloseTo(0.5);
+    joints[0] = spec.joints[0]!.max;
+    expect(integrateJoints(spec, joints, [0, 1, 0, 0], 0.1)).toBe(0);
   });
 });
