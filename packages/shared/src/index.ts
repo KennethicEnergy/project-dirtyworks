@@ -15,4 +15,5 @@ export * from "./messages";
 export * from "./movement";
 export * from "./rateLimit";
 export * from "./tables";
+export * from "./terrain";
 export * from "./vehicles";

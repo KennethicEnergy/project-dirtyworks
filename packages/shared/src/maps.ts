@@ -139,7 +139,7 @@ export const MAPS: Record<MapId, TableMap> = {
       groundHeight: 6,
       noiseAmp: 0.35,
       looseDepth: 2.5,
-      pit: { x: -14, z: 6, radius: 34, floorRadius: 18, depth: 6 },
+      pit: { x: -14, z: 6, radius: 34, floorRadius: 18, depth: 4.5 },
       ramp: { x0: 32, z0: 30, x1: 0, z1: 14, width: 7 },
       loading: { x: 36, z: -30, w: 30, d: 28 },
       mounds: [
