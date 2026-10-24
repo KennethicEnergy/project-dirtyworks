@@ -1,1 +1,102 @@
 @import "tailwindcss";
+
+/*
+ * Design tokens. Cafe chrome is coffee / cream / brick; safety yellow is reserved for the
+ * vehicles and the in-table HUD.
+ */
+@theme {
+  --font-sans: var(--font-fredoka), ui-rounded, "Segoe UI", system-ui, sans-serif;
+  --font-stencil: var(--font-saira-stencil), Impact, "Arial Black", sans-serif;
+
+  --color-coffee-950: #1b120c;
+  --color-coffee-900: #26190f;
+  --color-coffee-800: #352418;
+  --color-coffee-700: #4a3323;
+  --color-coffee-600: #654631;
+  --color-coffee-500: #82604a;
+  --color-coffee-400: #a3826a;
+
+  --color-cream-50: #fffaf0;
+  --color-cream-100: #f6ecd9;
+  --color-cream-200: #ead9bb;
+  --color-cream-300: #d9c39d;
+
+  --color-brick-400: #d0624a;
+  --color-brick-500: #b5452f;
+  --color-brick-600: #923523;
+  --color-brick-700: #6f2718;
+
+  --color-latte: #c8a47e;
+  --color-sage: #8fa58b;
+
+  --color-chalk-board: #23302a;
+  --color-chalk-board-dark: #1a241f;
+  --color-chalk: #ecefe6;
+  --color-chalk-dim: #a9b4a8;
+  --color-chalk-yellow: #f2df8a;
+  --color-chalk-pink: #f2b7b0;
+
+  --color-safety: #f5c518;
+  --color-safety-dark: #c99a00;
+  --color-hud: #1d1b19;
+
+  --radius-card: 1.25rem;
+  --shadow-card: 0 10px 30px -12px rgb(0 0 0 / 0.55);
+}
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    background: var(--color-coffee-900);
+    color: var(--color-cream-100);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-safety);
+    outline-offset: 2px;
+  }
+
+  dialog::backdrop {
+    background: rgb(20 12 8 / 0.65);
+    backdrop-filter: blur(2px);
+  }
+}
+
+@utility hazard-border {
+  border: 4px solid transparent;
+  border-image: repeating-linear-gradient(
+      -45deg,
+      var(--color-safety) 0 10px,
+      var(--color-hud) 10px 20px
+    )
+    4;
+}
+
+@utility hazard-strip {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--color-safety) 0 10px,
+    var(--color-hud) 10px 20px
+  );
+}
+
+@utility chalk-text {
+  color: var(--color-chalk);
+  text-shadow:
+    0 0 1px rgb(236 239 230 / 0.6),
+    0 0 6px rgb(236 239 230 / 0.15);
+}
+
+@utility wood-frame {
+  border: 12px solid #6e4428;
+  border-image: linear-gradient(135deg, #8a5a36, #5b3820 40%, #7b4f2e 70%, #5b3820) 12;
+  box-shadow:
+    inset 0 0 40px rgb(0 0 0 / 0.55),
+    0 18px 40px -16px rgb(0 0 0 / 0.7);
+}
