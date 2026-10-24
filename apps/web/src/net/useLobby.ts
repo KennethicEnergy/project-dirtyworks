@@ -72,7 +72,7 @@ export function useLobby(): {
         );
         joined.onLeave(() => !cancelled && setStatus("error"));
         // The first listing can arrive before these handlers exist; ask for it again.
-        joined.send("filter", {});
+        joined.send("filter", { name: TABLE_ROOM });
       })
       .catch((err) => {
         if (cancelled) return;

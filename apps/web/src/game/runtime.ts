@@ -49,6 +49,10 @@ export class GameRuntime {
   local: LocalVehicle | null = null;
   /** Called before every physics substep with the substep length (vehicle controllers). */
   readonly preStep = new Set<(dt: number) => void>();
+  /** Operator spot along the table rim (0..1), sent with every state update. */
+  edgeT = 0.5;
+  /** Number of rendered remote vehicles (perf overlay). */
+  remoteCount: () => number = () => 0;
   /** Height of the ground at (x, z); replaced by the terrain once it is loaded. */
   groundHeightAt: (x: number, z: number) => number;
 

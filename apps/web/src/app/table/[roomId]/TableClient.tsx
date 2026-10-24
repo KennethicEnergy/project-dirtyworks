@@ -51,12 +51,14 @@ export function TableClient({
   spectator: boolean;
 }) {
   const sessionRef = useRef<TableSession | null>(null);
+  const [session, setSession] = useState<TableSession | null>(null);
   const [joinError, setJoinError] = useState("");
   const status = useSession((s) => s.status);
   const role = useSession((s) => s.role);
   const mapId = useSession((s) => s.mapId);
   const materialId = useSession((s) => s.materialId);
   const spawn = useSession((s) => s.spawn);
+  const spawnSeq = useSession((s) => s.spawnSeq);
   const closedReason = useSession((s) => s.closedReason);
   const livery = useProfile((s) => s.livery);
 
@@ -64,7 +66,9 @@ export function TableClient({
     let cancelled = false;
     acquireTable(roomId, spectator ? "spectator" : "driver")
       .then((s) => {
-        if (!cancelled) sessionRef.current = s;
+        if (cancelled) return;
+        sessionRef.current = s;
+        setSession(s);
       })
       .catch((err) => !cancelled && setJoinError(friendlyError(err)));
     return () => {
@@ -114,7 +118,7 @@ export function TableClient({
 
   return (
     <div className="fixed inset-0 overflow-hidden bg-coffee-950">
-      <Game runtime={runtime} spawn={spawn} livery={livery} />
+      <Game runtime={runtime} session={session} spawn={spawn} spawnSeq={spawnSeq} livery={livery} />
       <Hud user={user} />
     </div>
   );

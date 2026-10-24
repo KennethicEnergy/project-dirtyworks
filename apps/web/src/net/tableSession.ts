@@ -42,7 +42,9 @@ export class TableSession {
         chat: w.chat,
       });
     });
-    room.onMessage(MSG.spawned, (s: SpawnedEvent) => useSession.getState().set({ spawn: s }));
+    room.onMessage(MSG.spawned, (s: SpawnedEvent) =>
+      useSession.setState((st) => ({ spawn: s, spawnSeq: st.spawnSeq + 1 })),
+    );
     room.onMessage(MSG.chat, (entry: ChatEntry) =>
       useSession.setState((s) => ({ chat: [...s.chat.slice(-49), entry] })),
     );

@@ -51,6 +51,8 @@ interface SessionState {
   chat: ChatEntry[];
   toasts: Toast[];
   spawn: SpawnedEvent | null;
+  /** Increments on every spawn so a respawn at the same point still rebuilds the vehicle. */
+  spawnSeq: number;
   set: (patch: Partial<Omit<SessionState, "set" | "pushToast" | "dropToast">>) => void;
   pushToast: (text: string, kind: Toast["kind"]) => void;
   dropToast: (id: number) => void;
@@ -76,6 +78,7 @@ export const initialSession = {
   chat: [] as ChatEntry[],
   toasts: [] as Toast[],
   spawn: null,
+  spawnSeq: 0,
 };
 
 export const useSession = create<SessionState>((set) => ({
