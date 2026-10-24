@@ -19,6 +19,7 @@ import {
   nextHost,
   PATCH_INTERVAL_MS,
   pongMsgSchema,
+  reportMsgSchema,
   quatFromYaw,
   restJoints,
   ROLES,
@@ -357,6 +358,22 @@ export class TableRoom extends Room<{ state: TableState; metadata: TableListing 
       info.pings.delete(msg.id);
       const player = this.state.players.get(client.sessionId);
       if (player) player.ping = Math.min(65535, Math.max(0, Math.round(this.deps.now() - sentAt)));
+    });
+
+    this.handle(MSG.report, "report", reportMsgSchema, (client, msg, info) => {
+      const target = this.state.players.get(msg.target);
+      if (!target || msg.target === client.sessionId) return;
+      // Reports go to the structured log for moderators; the reported player is not told.
+      this.log.warn("player reported", {
+        reporter: info.user.id,
+        target: target.userId,
+        reason: msg.reason,
+      });
+      client.send(MSG.notice, {
+        kind: "info",
+        name: "",
+        text: "Thanks for letting us know. The report was logged.",
+      });
     });
 
     this.handle(MSG.kick, "host", targetMsgSchema, (client, msg) => {

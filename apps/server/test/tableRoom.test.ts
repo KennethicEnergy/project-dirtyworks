@@ -10,7 +10,7 @@ import {
 } from "@dirtyworks/shared";
 import { SignJWT } from "jose";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { silentLogger } from "../src/logger";
+import { createLogger } from "../src/logger";
 import type { TableRoom } from "../src/rooms/TableRoom";
 import { createGameServer } from "../src/server";
 
@@ -25,6 +25,8 @@ const SETTINGS: TableSettingsInput = {
 };
 
 let colyseus: ColyseusTestServer;
+/** Warn+ log lines from the server, for assertions on structured logging. */
+const logLines: string[] = [];
 const open: ClientRoom[] = [];
 
 beforeAll(async () => {
@@ -36,7 +38,7 @@ beforeAll(async () => {
       dataDir: "./data-test",
       logLevel: "error",
     },
-    logger: silentLogger,
+    logger: createLogger("warn", {}, (line) => logLines.push(line)),
     reconnectSeconds: RECONNECT_SECONDS,
   });
   colyseus = await boot(server);
@@ -323,6 +325,20 @@ describe("hosting and moderation", () => {
     await room.leave();
     await until(() => server.state.hostId === bob.room.sessionId);
     expect(server.metadata.hostName).toBe("bob");
+  });
+
+  it("logs a structured line when a player is reported, without telling the target", async () => {
+    const { room, server } = await host();
+    const bob = await joinAs(server.roomId, "bob");
+    let bobHeard = false;
+    await sleep(150); // let the join notice pass first
+    bob.room.onMessage(MSG.notice, () => (bobHeard = true));
+    const ack = room.waitForMessage(MSG.notice);
+    room.send(MSG.report, { target: bob.room.sessionId, reason: "spam" });
+    expect(await ack).toMatchObject({ kind: "info" });
+    const entry = logLines.map((l) => JSON.parse(l)).find((e) => e.msg === "player reported");
+    expect(entry).toMatchObject({ reporter: "alice", target: "bob", reason: "spam" });
+    expect(bobHeard).toBe(false);
   });
 
   it("shares the host's day/night choice", async () => {

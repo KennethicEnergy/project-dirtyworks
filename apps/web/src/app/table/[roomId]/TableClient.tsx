@@ -11,6 +11,7 @@ import { useProfile } from "@/state/profileStore";
 import { useSession } from "@/state/sessionStore";
 import { buttonClass } from "@/ui/common/Button";
 import { Hud } from "@/ui/hud/Hud";
+import { TableUiContext } from "@/ui/hud/TableUiContext";
 
 const Game = dynamic(() => import("@/game/Game"), {
   ssr: false,
@@ -54,7 +55,6 @@ export function TableClient({
   const [session, setSession] = useState<TableSession | null>(null);
   const [joinError, setJoinError] = useState("");
   const status = useSession((s) => s.status);
-  const role = useSession((s) => s.role);
   const mapId = useSession((s) => s.mapId);
   const materialId = useSession((s) => s.materialId);
   const spawn = useSession((s) => s.spawn);
@@ -77,21 +77,6 @@ export function TableClient({
       releaseTable(roomId);
     };
   }, [roomId, spectator]);
-
-  // Until the garage lands, drivers start in a dump truck.
-  const requested = useRef(false);
-  useEffect(() => {
-    if (
-      status === "joined" &&
-      role === "driver" &&
-      !spawn &&
-      !requested.current &&
-      sessionRef.current
-    ) {
-      requested.current = true;
-      sessionRef.current.spawn("dump-truck", livery);
-    }
-  }, [status, role, spawn, livery]);
 
   const runtime = useMemo(
     () => (mapId && materialId ? new GameRuntime(mapId, materialId) : null),
@@ -119,7 +104,9 @@ export function TableClient({
   return (
     <div className="fixed inset-0 overflow-hidden bg-coffee-950">
       <Game runtime={runtime} session={session} spawn={spawn} spawnSeq={spawnSeq} livery={livery} />
-      <Hud user={user} />
+      <TableUiContext.Provider value={{ runtime, session, user }}>
+        <Hud />
+      </TableUiContext.Provider>
     </div>
   );
 }

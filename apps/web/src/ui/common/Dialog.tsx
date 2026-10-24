@@ -32,7 +32,7 @@ export function Dialog({
       onClick={(e) => {
         if (e.target === ref.current) onClose();
       }}
-      className={`m-auto w-[calc(100%-2rem)] ${wide ? "max-w-2xl" : "max-w-md"} rounded-card bg-cream-100 p-0 text-coffee-900 shadow-card`}
+      className={`pointer-events-auto m-auto w-[calc(100%-2rem)] ${wide ? "max-w-2xl" : "max-w-md"} rounded-card bg-cream-100 p-0 text-coffee-900 shadow-card`}
     >
       {open && (
         <div className="p-5 sm:p-6">
