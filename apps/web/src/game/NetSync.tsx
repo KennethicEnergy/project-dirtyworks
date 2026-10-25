@@ -28,11 +28,13 @@ interface SyncedTableState {
   keepForLater: boolean;
   players: {
     forEach(cb: (player: SyncedPlayer, key: string) => void): void;
+    get(key: string): SyncedPlayer | undefined;
   };
 }
 
 interface SyncedPlayer extends RemotePlayerState {
   userId: string;
+  moved: number;
   name: string;
   avatar: string;
   ping: number;
@@ -124,6 +126,9 @@ export function NetSync({ session }: { session: TableSession }) {
         remotes.beginFrame();
         state.players.forEach(visit);
         remotes.endFrame();
+        const me = state.players.get(room.sessionId);
+        rt.localLoadQ = me?.load ?? 0;
+        rt.localMovedQ = me?.moved ?? 0;
         if (clock.ready) {
           const view = rt.local?.pose ?? camera.position;
           const preset = QUALITY[useSettings.getState().quality];
@@ -133,6 +138,8 @@ export function NetSync({ session }: { session: TableSession }) {
             view.x,
             view.z,
             preset.drawDistance,
+            rt.dust,
+            rt.material.particleColor,
           );
         }
         summaryAcc += ctx.dt;

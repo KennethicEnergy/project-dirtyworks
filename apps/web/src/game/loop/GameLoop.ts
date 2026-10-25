@@ -90,6 +90,11 @@ export class GameLoop {
     this.lastTickMs = performance.now() - start;
   }
 
+  /** Frames ticked so far (perf overlay). */
+  get frame(): number {
+    return this.ctx.frame;
+  }
+
   /** Registered system names in execution order (debug/perf). */
   get systems(): readonly System[] {
     if (this.dirty) this.rebuild();

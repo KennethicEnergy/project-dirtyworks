@@ -26,8 +26,18 @@ export function HudFeed() {
         const vehicle = local?.spec.displayName ?? "";
         const vehicleId = local?.id ?? "";
         const battery = local ? Math.round(local.battery * 100) / 100 : 1;
-        if (speedKmh !== hud.speedKmh || vehicle !== hud.vehicle || battery !== hud.battery) {
-          hud.set({ speedKmh, vehicle, vehicleId, battery });
+        const capacityQ = local ? local.spec.tool.capacityM3 * 1024 : 0;
+        const loadFraction =
+          capacityQ > 0 ? Math.round((rt.localLoadQ / capacityQ) * 100) / 100 : 0;
+        const movedM3 = Math.round((rt.localMovedQ / 1024) * 10) / 10;
+        if (
+          speedKmh !== hud.speedKmh ||
+          vehicle !== hud.vehicle ||
+          battery !== hud.battery ||
+          loadFraction !== hud.loadFraction ||
+          movedM3 !== hud.movedM3
+        ) {
+          hud.set({ speedKmh, vehicle, vehicleId, battery, loadFraction, movedM3 });
         }
         // Rolled off the table: back to the garage for a fresh start.
         if (local && local.pose.y < -5 && !fell) {

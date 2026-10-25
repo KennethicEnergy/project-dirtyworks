@@ -25,12 +25,35 @@ const CLOSE_REASONS: Record<number, string> = {
   4103: "Your controller sent too many garbled signals.",
 };
 
+/** Receives terrain traffic once the game is mounted. */
+export interface TerrainSink {
+  welcome(w: Welcome): void;
+  snapshot(m: TerrainSnapshotMessage): void;
+  op(wire: unknown): void;
+}
+
+export interface TerrainSnapshotMessage {
+  seq: number;
+  snapshot: Uint8Array;
+  reset: boolean;
+}
+
+/** Terrain messages kept while no game is mounted (bounded; a gap triggers a resync anyway). */
+const MAX_BUFFERED_TERRAIN = 2048;
+
 export class TableSession {
+  /** Latest welcome (carries the terrain snapshot for whoever mounts next). */
+  lastWelcome: Welcome | null = null;
+  private terrainSink: TerrainSink | null = null;
+  private readonly terrainBuffer: ({ op: unknown } | { snapshot: TerrainSnapshotMessage })[] = [];
+
   constructor(readonly room: Room) {
     const store = useSession.getState();
     store.set({ ...initialSession, roomId: room.roomId, sessionId: room.sessionId });
 
     room.onMessage(MSG.welcome, (w: Welcome) => {
+      this.lastWelcome = w;
+      this.terrainSink?.welcome(w);
       useSession.getState().set({
         status: "joined",
         sessionId: w.sessionId,
@@ -56,6 +79,14 @@ export class TableSession {
       useSession.getState().set({ closedReason: m.reason }),
     );
     room.onMessage(MSG.ping, (p: { id: number }) => room.send(MSG.pong, { id: p.id }));
+    room.onMessage(MSG.terrainOp, (wire: unknown) => {
+      if (this.terrainSink) this.terrainSink.op(wire);
+      else this.buffer({ op: wire });
+    });
+    room.onMessage(MSG.terrainSnapshot, (m: TerrainSnapshotMessage) => {
+      if (this.terrainSink) this.terrainSink.snapshot(m);
+      else this.buffer({ snapshot: m });
+    });
     room.onDrop(() => useSession.getState().set({ status: "reconnecting" }));
     room.onReconnect(() => {
       useSession.getState().set({ status: "joined" });
@@ -75,6 +106,25 @@ export class TableSession {
 
   send(type: string, payload?: unknown): void {
     this.room.send(type, payload);
+  }
+
+  /** Hands terrain traffic to the game: the last welcome, then everything buffered, then live. */
+  attachTerrain(sink: TerrainSink): () => void {
+    this.terrainSink = sink;
+    if (this.lastWelcome) sink.welcome(this.lastWelcome);
+    for (const item of this.terrainBuffer.splice(0)) {
+      if ("op" in item) sink.op(item.op);
+      else sink.snapshot(item.snapshot);
+    }
+    return () => {
+      if (this.terrainSink === sink) this.terrainSink = null;
+    };
+  }
+
+  private buffer(item: { op: unknown } | { snapshot: TerrainSnapshotMessage }): void {
+    if ("snapshot" in item) this.terrainBuffer.length = 0;
+    this.terrainBuffer.push(item);
+    if (this.terrainBuffer.length > MAX_BUFFERED_TERRAIN) this.terrainBuffer.shift();
   }
 }
 

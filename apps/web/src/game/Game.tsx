@@ -12,7 +12,10 @@ import { RuntimeContext, type GameRuntime } from "./runtime";
 import { HudFeed } from "./HudFeed";
 import { NetSync } from "./NetSync";
 import type { TableSession } from "@/net/tableSession";
+import { DustSystem } from "./fx/DustSystem";
+import { TerrainNet } from "./terrain/TerrainNet";
 import { TerrainView } from "./terrain/TerrainView";
+import { ToolSystem } from "./vehicles/ToolSystem";
 import { LocalVehicle } from "./vehicles/LocalVehicle";
 import { Lighting } from "./world/Lighting";
 import { Props } from "./world/Props";
@@ -54,6 +57,9 @@ export default function Game({
             <Props />
             {spawn && <LocalVehicle key={spawnSeq} spawn={spawn} livery={livery} />}
             {session && <NetSync session={session} />}
+            {session && <TerrainNet session={session} />}
+            {session && <ToolSystem session={session} />}
+            <DustSystem />
           </Physics>
         </Suspense>
       </RuntimeContext.Provider>

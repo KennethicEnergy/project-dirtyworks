@@ -1,5 +1,6 @@
 "use client";
 
+import { VEHICLES, type VehicleId } from "@dirtyworks/shared";
 import Link from "next/link";
 import { useEffect } from "react";
 import { useHud } from "@/state/hudStore";
@@ -7,6 +8,8 @@ import { useSession } from "@/state/sessionStore";
 import { useUi } from "@/state/uiStore";
 import { Avatar } from "@/ui/common/Avatar";
 import { ChatPanel } from "./ChatPanel";
+import { Minimap } from "./Minimap";
+import { PerfOverlay } from "./PerfOverlay";
 import { Garage } from "./Garage";
 import { PlayerList } from "./PlayerList";
 import { SettingsDialog } from "./SettingsDialog";
@@ -20,8 +23,14 @@ function VehicleCard() {
   const speed = useHud((s) => s.speedKmh);
   const vehicle = useHud((s) => s.vehicle);
   const battery = useHud((s) => s.battery);
+  const vehicleId = useHud((s) => s.vehicleId);
+  const load = useHud((s) => s.loadFraction);
+  const moved = useHud((s) => s.movedM3);
   if (!vehicle) return null;
   const pct = Math.round(battery * 100);
+  const tool = vehicleId in VEHICLES ? VEHICLES[vehicleId as VehicleId].tool : null;
+  const holds = tool && tool.capacityM3 > 0;
+  const fill = Math.round(load * 100);
   return (
     <div className="hazard-border w-40 rounded-lg bg-hud/85 px-3 py-2">
       <p className="text-[10px] tracking-widest text-safety uppercase">{vehicle}</p>
@@ -39,6 +48,21 @@ function VehicleCard() {
         </div>
         <span className="w-7 text-right tabular-nums">{pct}%</span>
       </div>
+      {holds && (
+        <div
+          className="mt-1 flex items-center gap-2 text-[10px] text-cream-200"
+          title={tool.kind === "bed" ? "Bed" : "Bucket"}
+        >
+          <span>{tool.kind === "bed" ? "🚚" : "🪣"}</span>
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-cream-100/20">
+            <div className="h-full rounded-full bg-latte" style={{ width: `${fill}%` }} />
+          </div>
+          <span className="w-7 text-right tabular-nums">{fill}%</span>
+        </div>
+      )}
+      <p className="mt-1 text-[10px] text-cream-200">
+        Moved <span className="font-mono text-safety tabular-nums">{moved.toFixed(1)}</span> m³
+      </p>
     </div>
   );
 }
@@ -126,6 +150,10 @@ export function Hud() {
       <div className="absolute right-48 bottom-3 left-56 hidden justify-center lg:flex">
         <ToolHints />
       </div>
+      <div className="absolute right-3 bottom-3 hidden sm:block">
+        <Minimap />
+      </div>
+      <PerfOverlay />
       <PlayerList />
       <SettingsDialog />
       <Garage />

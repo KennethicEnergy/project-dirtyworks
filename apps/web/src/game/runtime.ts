@@ -21,6 +21,8 @@ import { createContext, useContext } from "react";
 import type { PerspectiveCamera, Scene, WebGLRenderer } from "three";
 import { InputSystem } from "./input/InputSystem";
 import { GameLoop } from "./loop/GameLoop";
+import type { TerrainSync } from "@/net/TerrainSync";
+import type { Dust } from "./fx/Dust";
 import type { ChunkColliders } from "./terrain/ChunkColliders";
 import type { ChunkMeshes } from "./terrain/ChunkMeshes";
 import type { VehicleModel } from "./vehicles/models/VehicleModel";
@@ -63,6 +65,13 @@ export class GameRuntime {
   terrainView: { meshes: ChunkMeshes; colliders: ChunkColliders } | null = null;
   /** Set for one frame when a whole snapshot is applied, so it is not shaded as fresh digging. */
   suppressFresh = false;
+  /** The replica's sync state (perf overlay). */
+  terrainSync: TerrainSync | null = null;
+  /** Material in the local bucket/bed and total moved, from the server (quanta). */
+  localLoadQ = 0;
+  localMovedQ = 0;
+  /** Dust/debris emitter once mounted. */
+  dust: Dust | null = null;
 
   constructor(mapId: MapId, materialId: MaterialId) {
     this.map = MAPS[mapId];

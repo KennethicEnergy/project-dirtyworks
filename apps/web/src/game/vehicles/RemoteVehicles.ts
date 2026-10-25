@@ -12,6 +12,7 @@ import {
 } from "@dirtyworks/shared";
 import type { Scene } from "three";
 import { InterpBuffer, type InterpPose } from "@/net/InterpBuffer";
+import type { Dust } from "../fx/Dust";
 import { isSameWorld, worldToken, type WorldToken } from "../physics/worldToken";
 import type { Rapier } from "../runtime";
 import { createVehicleModel } from "./models";
@@ -136,7 +137,15 @@ export class RemoteVehicles {
   }
 
   /** Places every remote at `renderTime` (server ms) and updates culling and colliders. */
-  update(renderTime: number, dt: number, viewX: number, viewZ: number, drawDistance: number): void {
+  update(
+    renderTime: number,
+    dt: number,
+    viewX: number,
+    viewZ: number,
+    drawDistance: number,
+    dust: Dust | null = null,
+    dustColor = 0,
+  ): void {
     for (const r of this.remotes.values()) {
       if (!r.buffer.sample(renderTime, r.pose, r.joints)) continue;
       const p = r.pose;
@@ -155,6 +164,9 @@ export class RemoteVehicles {
       }
       const near = dist <= COLLIDER_RANGE;
       if (r.collider.isEnabled() !== near) r.collider.setEnabled(near);
+      if (dust && r.model.root.visible && r.speed > 2.5 && Math.random() < r.speed * dt * 0.6) {
+        dust.emit(p.x, p.y + 0.2, p.z, 1, dustColor, 1.5, 0.8);
+      }
       r.body.setNextKinematicTranslation({ x: p.x, y: p.y, z: p.z });
       r.body.setNextKinematicRotation({ x: p.qx, y: p.qy, z: p.qz, w: p.qw });
     }

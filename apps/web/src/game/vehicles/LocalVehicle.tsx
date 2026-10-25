@@ -4,6 +4,7 @@ import {
   batterySpeedFactor,
   identityPose,
   integrateJoints,
+  m3ToQuanta,
   quatFromYaw,
   restJoints,
   VEHICLES,
@@ -28,6 +29,7 @@ export function LocalVehicle({ spawn, livery }: { spawn: SpawnedEvent; livery: L
 
   useEffect(() => {
     const spec = VEHICLES[spawn.vehicle];
+    const capacityQ = m3ToQuanta(spec.tool.capacityM3);
     const pose = identityPose();
     const q = quatFromYaw(spawn.yaw, { x: 0, y: 0, z: 0, w: 1 });
     pose.x = spawn.x;
@@ -79,6 +81,7 @@ export function LocalVehicle({ spawn, livery }: { spawn: SpawnedEvent; livery: L
         model.root.position.set(local.pose.x, local.pose.y, local.pose.z);
         model.root.quaternion.set(local.pose.qx, local.pose.qy, local.pose.qz, local.pose.qw);
         model.setJoints(local.joints);
+        if (capacityQ > 0) model.setLoad(rt.localLoadQ / capacityQ);
         controller.syncVisuals(model, ctx.dt);
       },
     });
