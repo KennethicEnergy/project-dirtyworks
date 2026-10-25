@@ -15,7 +15,8 @@ import { Chalkboard } from "./Chalkboard";
 import { CreateTableDialog } from "./CreateTableDialog";
 import { ProfileDialog } from "./ProfileDialog";
 import { Radio } from "./Radio";
-import { JoinByCodeDialog, PasswordDialog, TableFullDialog } from "./SmallDialogs";
+import { TableFullDialog } from "@/ui/hud/TableFullDialog";
+import { JoinByCodeDialog, PasswordDialog } from "./SmallDialogs";
 
 interface Target {
   roomId: string;

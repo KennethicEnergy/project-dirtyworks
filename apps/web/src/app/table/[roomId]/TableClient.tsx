@@ -3,14 +3,16 @@
 import type { GameUser, VehicleId } from "@dirtyworks/shared";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GameRuntime } from "@/game/runtime";
-import { friendlyError } from "@/net/errors";
+import { errorCodeOf, friendlyError } from "@/net/errors";
 import { acquireTable, releaseTable, type TableSession } from "@/net/tableSession";
 import { useProfile } from "@/state/profileStore";
 import { useSession } from "@/state/sessionStore";
 import { buttonClass } from "@/ui/common/Button";
 import { Hud } from "@/ui/hud/Hud";
+import { TableFullPrompt } from "@/ui/hud/TableFullDialog";
 import { TableUiContext } from "@/ui/hud/TableUiContext";
 
 const Game = dynamic(() => import("@/game/Game"), {
@@ -51,9 +53,13 @@ export function TableClient({
   user: GameUser;
   spectator: boolean;
 }) {
+  const router = useRouter();
   const sessionRef = useRef<TableSession | null>(null);
   const [session, setSession] = useState<TableSession | null>(null);
   const [joinError, setJoinError] = useState("");
+  const [tableFull, setTableFull] = useState(false);
+  /** Bumped to retry the join (a seat opened up while waiting). */
+  const [attempt, setAttempt] = useState(0);
   const status = useSession((s) => s.status);
   const mapId = useSession((s) => s.mapId);
   const materialId = useSession((s) => s.materialId);
@@ -64,19 +70,25 @@ export function TableClient({
 
   useEffect(() => {
     let cancelled = false;
-    acquireTable(roomId, spectator ? "spectator" : "driver")
+    const role = spectator ? "spectator" : "driver";
+    acquireTable(roomId, role)
       .then((s) => {
         if (cancelled) return;
         sessionRef.current = s;
         setSession(s);
       })
-      .catch((err) => !cancelled && setJoinError(friendlyError(err)));
+      .catch((err) => {
+        if (cancelled) return;
+        if (errorCodeOf(err) === "TABLE_FULL") setTableFull(true);
+        else setJoinError(friendlyError(err));
+      });
     return () => {
       cancelled = true;
       sessionRef.current = null;
-      releaseTable(roomId);
+      setSession(null);
+      releaseTable(roomId, role);
     };
-  }, [roomId, spectator]);
+  }, [roomId, spectator, attempt]);
 
   const runtime = useMemo(
     () => (mapId && materialId ? new GameRuntime(mapId, materialId) : null),
@@ -97,6 +109,25 @@ export function TableClient({
     };
   }, [runtime]);
 
+  if (tableFull) {
+    return (
+      <>
+        <TableMessage title="Table is full" action={false} />
+        <TableFullPrompt
+          roomId={roomId}
+          onSpectate={() => {
+            setTableFull(false);
+            router.replace(`/table/${roomId}?as=spectator`);
+          }}
+          onRetry={() => {
+            setTableFull(false);
+            setAttempt((a) => a + 1);
+          }}
+          onClose={() => router.push("/cafe")}
+        />
+      </>
+    );
+  }
   if (joinError) return <TableMessage title="Couldn't sit down" body={joinError} />;
   if (status === "closed") return <TableMessage title="Table closed" body={closedReason} />;
   if (!runtime) return <TableMessage title="Pulling up a chair…" action={false} />;

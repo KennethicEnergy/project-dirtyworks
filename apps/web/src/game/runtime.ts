@@ -25,6 +25,7 @@ import type { TerrainSync } from "@/net/TerrainSync";
 import type { Dust } from "./fx/Dust";
 import type { ChunkColliders } from "./terrain/ChunkColliders";
 import type { ChunkMeshes } from "./terrain/ChunkMeshes";
+import type { RemoteVehicles } from "./vehicles/RemoteVehicles";
 import type { VehicleModel } from "./vehicles/models/VehicleModel";
 
 export type Rapier = typeof RAPIER;
@@ -76,6 +77,12 @@ export class GameRuntime {
   dust: Dust | null = null;
   /** Tilt-shift focus line (0 bottom … 1 top), kept on the local vehicle by the camera. */
   focusY = 0.5;
+  /** Other drivers, once the table session is mounted (nameplates, spectate camera). */
+  remotes: RemoteVehicles | null = null;
+  /** Session id of the driver a spectator is watching. */
+  spectateId: string | null = null;
+  /** Set by photo mode: resolved with a PNG data URL right after the next frame renders. */
+  captureRequest: ((dataUrl: string) => void) | null = null;
   /** Each RC car keeps its own charge across garage swaps and respawns. */
   readonly batteries: Partial<Record<VehicleId, number>> = {};
 

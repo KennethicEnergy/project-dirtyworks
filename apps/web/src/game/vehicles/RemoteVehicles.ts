@@ -50,10 +50,22 @@ export interface RemotePlayerState {
   load: number;
   /** 0..255 */
   battery: number;
+  /** Operator spot along the rim (0..1). */
+  edgeT: number;
   joints: { length: number; at(i: number): number | undefined };
 }
 
-interface Remote {
+/** What other systems may read about a remote vehicle (nameplates, spectate camera). */
+export interface RemoteView {
+  readonly vehicle: VehicleId;
+  /** Interpolated pose at the current render time. */
+  readonly pose: InterpPose;
+  readonly edgeT: number;
+  /** Within draw distance. */
+  readonly visible: boolean;
+}
+
+interface Remote extends RemoteView {
   sessionId: string;
   vehicle: VehicleId;
   model: VehicleModel;
@@ -72,6 +84,8 @@ interface Remote {
   lx: number;
   lz: number;
   battery: number;
+  edgeT: number;
+  visible: boolean;
   antenna: AntennaSpring;
   /** Interpolated pose plus the latest sampled velocity, fed to the antenna spring. */
   feel: Pose;
@@ -99,6 +113,15 @@ export class RemoteVehicles {
 
   get count(): number {
     return this.remotes.size;
+  }
+
+  get(sessionId: string): RemoteView | undefined {
+    return this.remotes.get(sessionId);
+  }
+
+  /** Remote vehicles by session id (read-only views). */
+  entries(): IterableIterator<[string, RemoteView]> {
+    return this.remotes.entries();
   }
 
   beginFrame(): void {
@@ -149,6 +172,7 @@ export class RemoteVehicles {
       r.feel.vx = p.vx;
       r.feel.vz = p.vz;
       r.battery = p.battery / 255;
+      r.edgeT = p.edgeT;
       const capacity = VEHICLES[r.vehicle].tool.capacityM3;
       r.model.setLoad(capacity > 0 ? p.load / 1024 / capacity : 0);
     }
@@ -175,7 +199,8 @@ export class RemoteVehicles {
       if (!r.buffer.sample(renderTime, r.pose, r.joints)) continue;
       const p = r.pose;
       const dist = Math.hypot(p.x - viewX, p.z - viewZ);
-      r.model.root.visible = dist <= drawDistance;
+      r.visible = dist <= drawDistance;
+      r.model.root.visible = r.visible;
       r.model.root.position.set(p.x, p.y, p.z);
       r.model.root.quaternion.set(p.qx, p.qy, p.qz, p.qw);
       r.model.setJoints(r.joints);
@@ -263,6 +288,8 @@ export class RemoteVehicles {
       lx: p.x,
       lz: p.z,
       battery: p.battery / 255,
+      edgeT: p.edgeT,
+      visible: true,
       antenna: new AntennaSpring(),
       feel: identityPose(),
       ledState: null,

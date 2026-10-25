@@ -10,9 +10,11 @@ import {
   chatMsgSchema,
   clampJoints,
   dayNightMsgSchema,
+  emoteMsgSchema,
   emptyMsgSchema,
   encodeOp,
   keepMsgSchema,
+  liveryMsgSchema,
   MATERIALS,
   makeInviteCode,
   MAPS,
@@ -36,6 +38,7 @@ import {
   VEHICLES,
   canCreateTable,
   type ChatEntry,
+  type EmoteEvent,
   type GameUser,
   type MaterialId,
   type NoticeEvent,
@@ -453,6 +456,20 @@ export class TableRoom extends Room<{ state: TableState; metadata: TableListing 
       this.chat.push(entry);
       if (this.chat.length > CHAT_HISTORY) this.chat.splice(0, this.chat.length - CHAT_HISTORY);
       this.broadcast(MSG.chat, entry);
+    });
+
+    // Emotes float above the sender's operator chip on every screen (spectators emote too).
+    this.handle(MSG.emote, "emote", emoteMsgSchema, (client, msg) => {
+      const event: EmoteEvent = { sessionId: client.sessionId, id: msg.id };
+      this.broadcast(MSG.emote, event);
+    });
+
+    this.handle(MSG.livery, "livery", liveryMsgSchema, (client, msg) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player) return;
+      player.color = msg.color;
+      player.decal = msg.decal;
+      player.number = msg.number;
     });
 
     this.handle(MSG.pong, "pong", pongMsgSchema, (client, msg, info) => {

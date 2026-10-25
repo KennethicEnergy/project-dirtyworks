@@ -12,6 +12,7 @@ import {
   MAPS,
   MATERIALS,
   MSG,
+  type EmoteEvent,
   type MaterialId,
   type SpawnedEvent,
   type Welcome,
@@ -426,6 +427,52 @@ describe("chat", () => {
     await sleep(300);
     expect(received.map((m) => m.text)).toEqual(["hello there", "two", "three"]);
     expect(received[0]!.name).toBe("ALICE");
+  });
+});
+
+describe("emotes, liveries and spectators", () => {
+  it("broadcasts emotes to everyone and drops a burst beyond the limit", async () => {
+    const { room, server } = await host();
+    const bob = await joinAs(server.roomId, "bob");
+    const seen: EmoteEvent[] = [];
+    bob.room.onMessage(MSG.emote, (e: EmoteEvent) => seen.push(e));
+    for (let i = 0; i < 6; i++) room.send(MSG.emote, { id: "thumbs-up" });
+    await sleep(300);
+    expect(seen).toHaveLength(3);
+    expect(seen[0]).toEqual({ sessionId: room.sessionId, id: "thumbs-up" });
+  });
+
+  it("lets spectators emote too, but not with unknown emotes", async () => {
+    const { room, server } = await host();
+    const watcher = await joinAs(server.roomId, "carol", { role: "spectator" });
+    const seen: EmoteEvent[] = [];
+    room.onMessage(MSG.emote, (e: EmoteEvent) => seen.push(e));
+    watcher.room.send(MSG.emote, { id: "rocket-launch" });
+    watcher.room.send(MSG.emote, { id: "laugh" });
+    await sleep(300);
+    expect(seen).toEqual([{ sessionId: watcher.room.sessionId, id: "laugh" }]);
+  });
+
+  it("applies a valid livery and rejects an invalid one", async () => {
+    const { room, server } = await host();
+    await spawn(room);
+    room.send(MSG.livery, { color: "brick-red", decal: "checker", number: 42 });
+    await until(() => server.state.players.get(room.sessionId)?.color === "brick-red");
+    room.send(MSG.livery, { color: "neon-purple", decal: "flames", number: 420 });
+    await sleep(300);
+    const p = server.state.players.get(room.sessionId)!;
+    expect([p.color, p.decal, p.number]).toEqual(["brick-red", "checker", 42]);
+  });
+
+  it("does not let a spectator spawn a vehicle", async () => {
+    const { server } = await host();
+    const watcher = await joinAs(server.roomId, "carol", { role: "spectator" });
+    let spawned = false;
+    watcher.room.onMessage(MSG.spawned, () => (spawned = true));
+    watcher.room.send(MSG.spawn, { vehicle: "excavator", livery: DEFAULT_LIVERY });
+    await sleep(300);
+    expect(spawned).toBe(false);
+    expect(server.state.players.get(watcher.room.sessionId)?.vehicle).toBe("");
   });
 });
 

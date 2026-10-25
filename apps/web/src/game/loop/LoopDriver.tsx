@@ -52,6 +52,12 @@ export function LoopDriver() {
           } else {
             gl.render(scene, camera);
           }
+          // Read the canvas in the same task as the render (no preserveDrawingBuffer needed).
+          const capture = rt.captureRequest;
+          if (capture) {
+            rt.captureRequest = null;
+            capture(gl.domElement.toDataURL("image/png"));
+          }
         },
       },
       100,

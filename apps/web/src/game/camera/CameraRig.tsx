@@ -1,6 +1,14 @@
 "use client";
 
-import { nearestEdgeT, rimExtents, rimPoint, vec3, walkEdgeT, yawOf } from "@dirtyworks/shared";
+import {
+  nearestEdgeT,
+  rimExtents,
+  rimPoint,
+  vec3,
+  walkEdgeT,
+  yawOf,
+  type Pose,
+} from "@dirtyworks/shared";
 import { useThree } from "@react-three/fiber";
 import { useEffect } from "react";
 import { Vector3, type PerspectiveCamera } from "three";
@@ -17,6 +25,9 @@ const MODE_LABEL: Record<CameraMode, string> = {
   free: "Free orbit: drag to look around",
 };
 const BASE_FOV = 45;
+
+/** Position and orientation of whatever the camera follows (local pose or interpolated remote). */
+type Followed = Pick<Pose, "x" | "y" | "z" | "qx" | "qy" | "qz" | "qw">;
 
 /** The operator walks the rim toward their vehicle: proportional, capped, with a dead zone. */
 const WALK_MAX = 9;
@@ -62,8 +73,13 @@ export function CameraRig() {
     const projected = new Vector3();
     const spot = vec3();
 
-    const mode = () => useUi.getState().cameraMode;
+    /** Photo mode always flies the free camera. */
+    const mode = (): CameraMode => {
+      const ui = useUi.getState();
+      return ui.photoMode ? "free" : ui.cameraMode;
+    };
     controls.enabled = mode() === "free";
+    let lastMode = mode();
     const onDown = (e: PointerEvent) => {
       if (mode() !== "chase" || e.pointerType === "touch") return;
       dragging = true;
@@ -118,12 +134,12 @@ export function CameraRig() {
       camera.updateProjectionMatrix();
     };
 
-    /** Keeps the tilt-shift focus line on the vehicle's screen height. */
-    const aimFocus = (v: LocalVehicle | null, dt: number) => {
+    /** Keeps the tilt-shift focus line on the followed vehicle's screen height. */
+    const aimFocus = (p: Followed | null, dt: number) => {
       let target = 0.5;
-      if (v) {
+      if (p) {
         camera.updateMatrixWorld();
-        projected.set(v.pose.x, v.pose.y + 1, v.pose.z).project(camera);
+        projected.set(p.x, p.y + 1, p.z).project(camera);
         if (projected.z < 1) target = (projected.y + 1) / 2;
       }
       rt.focusY += (target - rt.focusY) * (1 - Math.exp(-4 * dt));
@@ -132,29 +148,42 @@ export function CameraRig() {
     const off = rt.loop.register("camera", {
       name: "camera-rig",
       update(ctx) {
-        if (rt.input.pressed("camera")) {
+        if (rt.input.pressed("camera") && !useUi.getState().photoMode) {
           const next = MODES[(MODES.indexOf(mode()) + 1) % MODES.length]!;
           useUi.getState().set({ cameraMode: next });
           useSession.getState().pushToast(MODE_LABEL[next], "info");
-          if (next === "free") controls.target.copy(look);
-          controls.enabled = next === "free";
+        }
+        const m = mode();
+        if (m !== lastMode) {
+          lastMode = m;
+          if (m === "free") controls.target.copy(look);
+          controls.enabled = m === "free";
         }
         const local = rt.local;
         if (local) walk(local, ctx.dt);
         else lastLocal = null;
 
-        const m = mode();
+        // Follow your own vehicle, or the driver you are spectating (from their rim spot).
+        let p: Followed | null = local?.pose ?? null;
+        let edgeT = rt.edgeT;
+        if (!p && rt.spectateId) {
+          const watched = rt.remotes?.get(rt.spectateId);
+          if (watched) {
+            p = watched.pose;
+            edgeT = watched.edgeT;
+          }
+        }
+
         if (m === "free") {
           setFov(BASE_FOV, ctx.dt);
           controls.update(ctx.dt);
-          aimFocus(local, ctx.dt);
+          aimFocus(p, ctx.dt);
           return;
         }
         let posRate = 4;
         let lookRate = 8;
-        if (local && m === "operator") {
-          const p = local.pose;
-          rimPoint(map, rt.edgeT, spot);
+        if (p && m === "operator") {
+          rimPoint(map, edgeT, spot);
           // Step back outward from the table (smooth around the corners).
           let ox = Math.sign(spot.x) * (spot.x / rim.hx) ** 4;
           let oz = Math.sign(spot.z) * (spot.z / rim.hz) ** 4;
@@ -171,8 +200,7 @@ export function CameraRig() {
           lookRate = 3;
           const d = camera.position.distanceTo(lookTarget);
           setFov(Math.max(LENS_MIN_FOV, Math.min(BASE_FOV, (BASE_FOV * LENS_NEAR) / d)), ctx.dt);
-        } else if (local) {
-          const p = local.pose;
+        } else if (p) {
           const yaw = yawOf(p.qx, p.qy, p.qz, p.qw) + orbit.yaw;
           const flat = Math.cos(orbit.pitch) * orbit.distance;
           desired.set(
@@ -191,7 +219,7 @@ export function CameraRig() {
         camera.position.lerp(desired, 1 - Math.exp(-posRate * ctx.dt));
         look.lerp(lookTarget, 1 - Math.exp(-lookRate * ctx.dt));
         camera.lookAt(look);
-        aimFocus(local, ctx.dt);
+        aimFocus(p, ctx.dt);
       },
     });
 

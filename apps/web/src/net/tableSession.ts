@@ -134,12 +134,15 @@ interface Entry {
   leaveTimer: ReturnType<typeof setTimeout> | null;
 }
 
+/** Keyed by room and role: a spectator taking a seat is a fresh join, not a reused session. */
 const sessions = new Map<string, Entry>();
 const LEAVE_DELAY_MS = 300;
+const keyOf = (roomId: string, role: Role) => `${roomId}:${role}`;
 
 /** Joins (or reuses) the table session for `roomId`. Pair every call with releaseTable(). */
 export function acquireTable(roomId: string, role: Role, password?: string): Promise<TableSession> {
-  const existing = sessions.get(roomId);
+  const key = keyOf(roomId, role);
+  const existing = sessions.get(key);
   if (existing) {
     existing.refs++;
     if (existing.leaveTimer) clearTimeout(existing.leaveTimer);
@@ -151,18 +154,19 @@ export function acquireTable(roomId: string, role: Role, password?: string): Pro
     return new TableSession(room);
   })();
   const entry: Entry = { promise, refs: 1, leaveTimer: null };
-  sessions.set(roomId, entry);
-  promise.catch(() => sessions.delete(roomId));
+  sessions.set(key, entry);
+  promise.catch(() => sessions.delete(key));
   return promise;
 }
 
-export function releaseTable(roomId: string): void {
-  const entry = sessions.get(roomId);
+export function releaseTable(roomId: string, role: Role): void {
+  const key = keyOf(roomId, role);
+  const entry = sessions.get(key);
   if (!entry) return;
   entry.refs--;
   if (entry.refs > 0) return;
   entry.leaveTimer = setTimeout(() => {
-    sessions.delete(roomId);
+    sessions.delete(key);
     void entry.promise.then((s) => s.room.leave()).catch(() => {});
   }, LEAVE_DELAY_MS);
 }

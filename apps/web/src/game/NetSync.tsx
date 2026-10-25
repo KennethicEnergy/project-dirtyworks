@@ -55,6 +55,7 @@ export function NetSync({ session }: { session: TableSession }) {
     const clock = new ServerClock();
     const remotes = new RemoteVehicles(world, rapier, scene, rt.map);
     rt.remoteCount = () => remotes.count;
+    rt.remotes = remotes;
 
     const offCorrection = room.onMessage(MSG.correction, (c: Correction) => {
       const body = rt.local?.body;
@@ -156,6 +157,7 @@ export function NetSync({ session }: { session: TableSession }) {
       offInterp();
       remotes.dispose();
       rt.remoteCount = () => 0;
+      if (rt.remotes === remotes) rt.remotes = null;
     };
   }, [rt, session, world, rapier, scene, camera]);
 
