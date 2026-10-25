@@ -5,9 +5,13 @@
 import type { Collider, RigidBody, World } from "@dimforge/rapier3d-compat";
 import {
   DEFAULT_LIVERY,
+  identityPose,
+  isAtChargingStation,
   liverySchema,
   VEHICLES,
   type Livery,
+  type Pose,
+  type TableMap,
   type VehicleId,
 } from "@dirtyworks/shared";
 import type { Scene } from "three";
@@ -16,7 +20,8 @@ import type { Dust } from "../fx/Dust";
 import { isSameWorld, worldToken, type WorldToken } from "../physics/worldToken";
 import type { Rapier } from "../runtime";
 import { createVehicleModel } from "./models";
-import type { VehicleModel } from "./models/VehicleModel";
+import type { LedState, VehicleModel } from "./models/VehicleModel";
+import { AntennaSpring, ledFor } from "./RcFeel";
 
 /** Remote vehicles beyond this distance (m) get no collider. */
 const COLLIDER_RANGE = 60;
@@ -43,6 +48,8 @@ export interface RemotePlayerState {
   vz: number;
   t: number;
   load: number;
+  /** 0..255 */
+  battery: number;
   joints: { length: number; at(i: number): number | undefined };
 }
 
@@ -60,15 +67,24 @@ interface Remote {
   spin: number;
   pose: InterpPose;
   joints: number[];
+  prevJoints: number[];
   /** Latest sample (for teleport detection). */
   lx: number;
   lz: number;
+  battery: number;
+  antenna: AntennaSpring;
+  /** Interpolated pose plus the latest sampled velocity, fed to the antenna spring. */
+  feel: Pose;
+  ledState: LedState | null;
+  ledOn: boolean;
 }
 
 export class RemoteVehicles {
   private readonly remotes = new Map<string, Remote>();
   private readonly token: WorldToken;
   private frame = 0;
+  /** Seconds of rendering, for LED blink phases. */
+  private time = 0;
   private readonly sampleJoints: number[] = [0, 0, 0, 0];
   private readonly samplePose: InterpPose = { x: 0, y: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1 };
 
@@ -76,6 +92,7 @@ export class RemoteVehicles {
     private readonly world: World,
     private readonly rapier: Rapier,
     private readonly scene: Scene,
+    private readonly map: TableMap,
   ) {
     this.token = worldToken(world);
   }
@@ -111,7 +128,10 @@ export class RemoteVehicles {
     if (p.t !== r.lastT) {
       r.lastT = p.t;
       const jumped = Math.hypot(p.x - r.lx, p.z - r.lz) > TELEPORT_DISTANCE;
-      if (jumped) r.buffer.clear();
+      if (jumped) {
+        r.buffer.clear();
+        r.antenna.reset();
+      }
       r.lx = p.x;
       r.lz = p.z;
       const sp = this.samplePose;
@@ -126,6 +146,9 @@ export class RemoteVehicles {
       for (let i = 0; i < 4; i++) sj[i] = p.joints.at(i) ?? 0;
       r.buffer.push(p.t, sp, sj);
       r.speed = Math.hypot(p.vx, p.vz);
+      r.feel.vx = p.vx;
+      r.feel.vz = p.vz;
+      r.battery = p.battery / 255;
       const capacity = VEHICLES[r.vehicle].tool.capacityM3;
       r.model.setLoad(capacity > 0 ? p.load / 1024 / capacity : 0);
     }
@@ -146,6 +169,8 @@ export class RemoteVehicles {
     dust: Dust | null = null,
     dustColor = 0,
   ): void {
+    this.time += dt;
+    const time = this.time;
     for (const r of this.remotes.values()) {
       if (!r.buffer.sample(renderTime, r.pose, r.joints)) continue;
       const p = r.pose;
@@ -154,6 +179,7 @@ export class RemoteVehicles {
       r.model.root.position.set(p.x, p.y, p.z);
       r.model.root.quaternion.set(p.qx, p.qy, p.qz, p.qw);
       r.model.setJoints(r.joints);
+      if (r.model.root.visible) this.feel(r, dt, time);
       r.spin += (r.speed / 0.75) * dt;
       const wheels = VEHICLES[r.vehicle].wheels;
       if (wheels) {
@@ -174,6 +200,28 @@ export class RemoteVehicles {
 
   dispose(): void {
     for (const id of [...this.remotes.keys()]) this.remove(id);
+  }
+
+  /** Antenna wobble and status LED, from interpolated motion and the synced battery. */
+  private feel(r: Remote, dt: number, time: number): void {
+    const f = r.feel;
+    const p = r.pose;
+    f.qx = p.qx;
+    f.qy = p.qy;
+    f.qz = p.qz;
+    f.qw = p.qw;
+    r.antenna.update(f, dt);
+    r.model.nodes.antenna?.rotation.set(r.antenna.tiltX, 0, r.antenna.tiltZ);
+    let moving = 0;
+    for (let i = 0; i < 4; i++) moving += Math.abs((r.joints[i] ?? 0) - (r.prevJoints[i] ?? 0));
+    for (let i = 0; i < 4; i++) r.prevJoints[i] = r.joints[i] ?? 0;
+    const charging = r.speed < 0.6 && r.battery < 0.999 && isAtChargingStation(this.map, p.x, p.z);
+    const led = ledFor(r.battery, moving / Math.max(dt, 1e-3), charging, time);
+    if (led.state !== r.ledState || led.on !== r.ledOn) {
+      r.ledState = led.state;
+      r.ledOn = led.on;
+      r.model.setLed(led.state, led.on);
+    }
   }
 
   private create(p: RemotePlayerState): Remote {
@@ -211,8 +259,14 @@ export class RemoteVehicles {
       spin: 0,
       pose: { x: p.x, y: p.y, z: p.z, qx: p.qx, qy: p.qy, qz: p.qz, qw: p.qw },
       joints: [0, 0, 0, 0],
+      prevJoints: [0, 0, 0, 0],
       lx: p.x,
       lz: p.z,
+      battery: p.battery / 255,
+      antenna: new AntennaSpring(),
+      feel: identityPose(),
+      ledState: null,
+      ledOn: false,
     };
     this.remotes.set(p.sessionId, r);
     return r;

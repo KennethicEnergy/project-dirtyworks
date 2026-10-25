@@ -9,6 +9,7 @@ import { CameraRig } from "./camera/CameraRig";
 import { LoopDriver } from "./loop/LoopDriver";
 import { PhysicsStepper } from "./physics/PhysicsStepper";
 import { RuntimeContext, type GameRuntime } from "./runtime";
+import { AudioSystem } from "./audio/AudioSystem";
 import { HudFeed } from "./HudFeed";
 import { NetSync } from "./NetSync";
 import type { TableSession } from "@/net/tableSession";
@@ -38,7 +39,7 @@ export default function Game({
   const preset = QUALITY[useSettings((s) => s.quality)];
   return (
     <Canvas
-      shadows={preset.shadows}
+      shadows={preset.shadows ? "percentage" : false}
       dpr={[1, preset.dprCap]}
       camera={{ fov: 45, near: 0.5, far: 2500, position: [0, 70, -100] }}
       gl={{ antialias: true, powerPreference: "high-performance" }}
@@ -49,6 +50,7 @@ export default function Game({
         <LoopDriver />
         <CameraRig />
         <HudFeed />
+        <AudioSystem />
         <Suspense fallback={null}>
           <Physics paused gravity={[0, -GRAVITY, 0]}>
             <PhysicsStepper />

@@ -82,6 +82,11 @@ export class InputSystem {
     };
   }
 
+  /** Fires an edge-triggered action from an on-screen button (touch transmitter). */
+  trigger(action: Action): void {
+    this.pendingEdges.add(action);
+  }
+
   /** True during the one frame after the action's key/button went down. */
   pressed(action: Action): boolean {
     return this.frameEdges.has(action);

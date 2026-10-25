@@ -6,6 +6,7 @@ import { useProfile } from "@/state/profileStore";
 import { useSession } from "@/state/sessionStore";
 import { useUi } from "@/state/uiStore";
 import { useTableUi } from "./TableUiContext";
+import { useTouchMode } from "./Transmitter";
 
 const VISIBLE = 6;
 
@@ -16,6 +17,7 @@ export function ChatPanel() {
   const players = useSession((s) => s.players);
   const muted = useProfile((s) => s.muted);
   const open = useUi((s) => s.chatOpen);
+  const touch = useTouchMode();
   const setUi = useUi((s) => s.set);
   const [text, setText] = useState("");
   const [hint, setHint] = useState("");
@@ -79,6 +81,14 @@ export function ChatPanel() {
             className="min-w-0 flex-1 rounded-xl border-2 border-safety/60 bg-hud/90 px-3 py-1.5 text-cream-50 placeholder:text-cream-300/60 focus:outline-none"
           />
         </form>
+      ) : touch ? (
+        <button
+          type="button"
+          onClick={() => setUi({ chatOpen: true })}
+          className="pointer-events-auto w-fit rounded-full bg-hud/80 px-3 py-1 text-xs font-semibold"
+        >
+          💬 Chat
+        </button>
       ) : (
         <p className="text-xs text-cream-200/70">Press Enter to chat</p>
       )}

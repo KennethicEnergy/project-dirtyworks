@@ -43,6 +43,8 @@ export interface LocalVehicle {
   toolActivity: number;
   /** 0..1 */
   battery: number;
+  /** Parked on a charging pad this frame. */
+  charging: boolean;
 }
 
 export class GameRuntime {
@@ -72,6 +74,10 @@ export class GameRuntime {
   localMovedQ = 0;
   /** Dust/debris emitter once mounted. */
   dust: Dust | null = null;
+  /** Tilt-shift focus line (0 bottom … 1 top), kept on the local vehicle by the camera. */
+  focusY = 0.5;
+  /** Each RC car keeps its own charge across garage swaps and respawns. */
+  readonly batteries: Partial<Record<VehicleId, number>> = {};
 
   constructor(mapId: MapId, materialId: MaterialId) {
     this.map = MAPS[mapId];

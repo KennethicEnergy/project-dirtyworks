@@ -1,11 +1,22 @@
 "use client";
 
+import { useEffect } from "react";
+import { setLoop, SILENT } from "@/game/audio/sound";
 import { RADIO_CHANNELS, useProfile } from "@/state/profileStore";
 
-/** Cafe radio stub: channel names only, no audio files yet. */
+const ROOM_TONE = { gain: 0.35, rate: 1 };
+
+/**
+ * Cafe radio stub: channel names only, no music files yet. While it is on, the synth plays the
+ * cafe's room tone (starts after your first click or key press, as browsers require).
+ */
 export function Radio() {
   const radio = useProfile((s) => s.radio);
   const setRadio = useProfile((s) => s.setRadio);
+  useEffect(() => {
+    setLoop("cafe", radio.on ? ROOM_TONE : SILENT);
+    return () => setLoop("cafe", SILENT);
+  }, [radio.on]);
   const channel = RADIO_CHANNELS[radio.channel] ?? RADIO_CHANNELS[0];
   return (
     <section className="rounded-card bg-coffee-700/90 p-4 shadow-card">

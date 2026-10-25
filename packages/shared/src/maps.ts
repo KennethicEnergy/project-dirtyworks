@@ -311,8 +311,8 @@ export function mapBounds(map: TableMap): Bounds {
   return { minX: -hx, maxX: hx, minZ: -hz, maxZ: hz, minY: -2, maxY: map.maxHeight + 40 };
 }
 
-/** Half extents of the rim walkway rectangle the operators stand on. */
-function rimExtents(map: TableMap): { hx: number; hz: number; perimeter: number } {
+/** Half extents and length of the rim walkway rectangle the operators stand on. */
+export function rimExtents(map: TableMap): { hx: number; hz: number; perimeter: number } {
   const hx = map.cellsX / 2 + map.tabletop.rimWidth / 2;
   const hz = map.cellsZ / 2 + map.tabletop.rimWidth / 2;
   return { hx, hz, perimeter: 4 * (hx + hz) };
@@ -371,4 +371,18 @@ export function nearestEdgeT(map: TableMap, x: number, z: number): number {
   if (dWest < bestD) bestS = 4 * hx + 2 * hz + (hz - cz);
   const t = bestS / perimeter;
   return t >= 1 ? t - 1 : t;
+}
+
+/**
+ * Walks an operator spot `from` toward `to` (both edgeT) by at most `meters` along the rim,
+ * taking the shorter way round. Result stays in [0, 1).
+ */
+export function walkEdgeT(map: TableMap, from: number, to: number, meters: number): number {
+  const { perimeter } = rimExtents(map);
+  let delta = to - from;
+  delta -= Math.round(delta);
+  const step = meters / perimeter;
+  const t = Math.abs(delta) <= step ? to : from + Math.sign(delta) * step;
+  const wrapped = t - Math.floor(t);
+  return wrapped >= 1 ? 0 : wrapped;
 }

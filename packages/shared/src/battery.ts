@@ -1,4 +1,6 @@
 /** RC battery: drains with use, never stops the vehicle, recharges at the charging station. */
+import type { TableMap } from "./maps";
+
 export const BATTERY = {
   idleDrainPerSec: 1 / 7200,
   driveDrainPerSec: 1 / 650,
@@ -30,4 +32,16 @@ export function batterySpeedFactor(level: number): number {
   const l = clamp01(level);
   if (l >= BATTERY.lowThreshold) return 1;
   return BATTERY.lowSpeedFactor + (1 - BATTERY.lowSpeedFactor) * (l / BATTERY.lowThreshold);
+}
+
+/** True when (x, z) is within charging range of one of the table's charging stations. */
+export function isAtChargingStation(map: TableMap, x: number, z: number): boolean {
+  const r2 = BATTERY.stationRadius * BATTERY.stationRadius;
+  for (const p of map.props) {
+    if (p.kind !== "charging-station") continue;
+    const dx = x - p.x;
+    const dz = z - p.z;
+    if (dx * dx + dz * dz <= r2) return true;
+  }
+  return false;
 }

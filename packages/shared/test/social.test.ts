@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { batterySpeedFactor, chargeBattery, drainBattery } from "../src/battery";
+import {
+  batterySpeedFactor,
+  chargeBattery,
+  drainBattery,
+  isAtChargingStation,
+} from "../src/battery";
+import { MAPS } from "../src/maps";
 import { challengeDateKey, challengeForDate, CHALLENGES } from "../src/challenges";
 import { filterProfanity, sanitizeChat, setProfanityFilter } from "../src/chat";
 import { createEmoteLimiter, emoteForKey } from "../src/emotes";
@@ -142,6 +148,14 @@ describe("battery", () => {
     expect(level).toBeGreaterThan(0);
     for (let s = 0; s < 120; s++) level = drainBattery(level, 1, 0, 1);
     expect(level).toBe(0);
+  });
+
+  it("knows when a vehicle is parked on a charging pad", () => {
+    const map = MAPS["mini-quarry"];
+    const pad = map.props.find((p) => p.kind === "charging-station")!;
+    expect(isAtChargingStation(map, pad.x + 1, pad.z - 1)).toBe(true);
+    expect(isAtChargingStation(map, pad.x + 20, pad.z)).toBe(false);
+    expect(isAtChargingStation(map, 0, 0)).toBe(false);
   });
 
   it("recharges to full at the charging station and never above 1", () => {

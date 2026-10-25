@@ -17,7 +17,7 @@ interface UiState {
 }
 
 export const useUi = create<UiState>((set) => ({
-  cameraMode: "chase",
+  cameraMode: "operator",
   garageOpen: false,
   chatOpen: false,
   playerListOpen: false,

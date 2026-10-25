@@ -17,12 +17,14 @@ import { TableMenu } from "./TableMenu";
 import { useTableUi } from "./TableUiContext";
 import { Toasts } from "./Toasts";
 import { ToolHints } from "./ToolHints";
+import { Transmitter, useTouchMode } from "./Transmitter";
 import { useTableHotkeys } from "./useTableHotkeys";
 
 function VehicleCard() {
   const speed = useHud((s) => s.speedKmh);
   const vehicle = useHud((s) => s.vehicle);
   const battery = useHud((s) => s.battery);
+  const charging = useHud((s) => s.charging);
   const vehicleId = useHud((s) => s.vehicleId);
   const load = useHud((s) => s.loadFraction);
   const moved = useHud((s) => s.movedM3);
@@ -38,8 +40,11 @@ function VehicleCard() {
         {speed}
         <span className="ml-1 text-sm text-cream-200">km/h</span>
       </p>
-      <div className="mt-1 flex items-center gap-2 text-[10px] text-cream-200" title="Battery">
-        <span>🔋</span>
+      <div
+        className="mt-1 flex items-center gap-2 text-[10px] text-cream-200"
+        title={charging ? "Battery (charging)" : "Battery"}
+      >
+        <span className={charging ? "animate-pulse" : ""}>{charging ? "⚡" : "🔋"}</span>
         <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-cream-100/20">
           <div
             className={`h-full rounded-full ${pct > 20 ? "bg-safety" : "bg-brick-400"}`}
@@ -121,6 +126,7 @@ export function Hud() {
   const settingsOpen = useUi((s) => s.settingsOpen);
   const spawn = useSession((s) => s.spawn);
   const role = useSession((s) => s.role);
+  const touch = useTouchMode();
   useTableHotkeys();
 
   // Driving input pauses while typing or browsing menus.
@@ -143,16 +149,37 @@ export function Hud() {
         )}
         <Toasts />
       </div>
-      <div className="absolute bottom-3 left-3 flex flex-col gap-2">
-        <ChatPanel />
-        <VehicleCard />
-      </div>
-      <div className="absolute right-48 bottom-3 left-56 hidden justify-center lg:flex">
-        <ToolHints />
-      </div>
-      <div className="absolute right-3 bottom-3 hidden sm:block">
-        <Minimap />
-      </div>
+      {touch ? (
+        <>
+          {/* The bottom belongs to the transmitter (the touch controller). */}
+          <div className="absolute top-[4.75rem] left-3 flex flex-col gap-2">
+            <VehicleCard />
+            <ChatPanel />
+          </div>
+          <div className="absolute top-16 right-3 hidden sm:block">
+            <Minimap />
+          </div>
+          <div className="absolute inset-x-0 bottom-2 flex justify-center px-2">
+            <Transmitter />
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="absolute bottom-3 left-3 flex flex-col gap-2">
+            <ChatPanel />
+            <VehicleCard />
+          </div>
+          <div className="absolute right-48 bottom-3 left-56 hidden flex-col items-center gap-2 sm:flex">
+            <Transmitter />
+            <div className="hidden lg:block">
+              <ToolHints />
+            </div>
+          </div>
+          <div className="absolute right-3 bottom-3 hidden sm:block">
+            <Minimap />
+          </div>
+        </>
+      )}
       <PerfOverlay />
       <PlayerList />
       <SettingsDialog />

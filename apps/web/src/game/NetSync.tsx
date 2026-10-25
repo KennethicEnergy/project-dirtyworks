@@ -53,7 +53,7 @@ export function NetSync({ session }: { session: TableSession }) {
   useEffect(() => {
     const room = session.room;
     const clock = new ServerClock();
-    const remotes = new RemoteVehicles(world, rapier, scene);
+    const remotes = new RemoteVehicles(world, rapier, scene, rt.map);
     rt.remoteCount = () => remotes.count;
 
     const offCorrection = room.onMessage(MSG.correction, (c: Correction) => {

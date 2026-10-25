@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { CHUNK_CELLS } from "../src/constants";
-import { MAP_IDS, MAPS, mapBounds, nearestEdgeT, rimPoint } from "../src/maps";
+import {
+  MAP_IDS,
+  MAPS,
+  mapBounds,
+  nearestEdgeT,
+  rimExtents,
+  rimPoint,
+  walkEdgeT,
+} from "../src/maps";
 import { MATERIALS, MATERIAL_IDS } from "../src/materials";
 import { vec3 } from "../src/math";
 
@@ -72,6 +80,33 @@ describe("table rim", () => {
     const p = rimPoint(map, t, vec3());
     expect(p.x).toBeGreaterThan(60);
     expect(p.z).toBeCloseTo(0);
+  });
+});
+
+describe("operator walking the rim", () => {
+  const map = MAPS["mini-quarry"];
+  const { perimeter } = rimExtents(map);
+
+  it("moves toward the target by at most the given distance", () => {
+    const t = walkEdgeT(map, 0.2, 0.4, 10);
+    expect(t).toBeCloseTo(0.2 + 10 / perimeter, 6);
+  });
+
+  it("stops exactly on the target when it is close enough", () => {
+    expect(walkEdgeT(map, 0.2, 0.2001, 10)).toBe(0.2001);
+  });
+
+  it("takes the short way round across t = 0", () => {
+    const t = walkEdgeT(map, 0.98, 0.02, 5);
+    expect(t).toBeCloseTo(0.98 + 5 / perimeter, 6);
+    const back = walkEdgeT(map, 0.02, 0.98, 5);
+    expect(back).toBeCloseTo(0.02 - 5 / perimeter, 6);
+  });
+
+  it("always stays in [0, 1)", () => {
+    expect(walkEdgeT(map, 0.999, 0.01, 50)).toBeLessThan(1);
+    expect(walkEdgeT(map, 0.001, 0.99, 50)).toBeGreaterThanOrEqual(0);
+    expect(walkEdgeT(map, 0.999, 0.01, 50)).toBeCloseTo(0.01, 6);
   });
 });
 
