@@ -5,8 +5,10 @@
 import type RAPIER from "@dimforge/rapier3d-compat";
 import type { RigidBody, World } from "@dimforge/rapier3d-compat";
 import {
+  createTerrainForMap,
   MAPS,
   MATERIALS,
+  type Terrain,
   type MapId,
   type MaterialId,
   type MaterialPreset,
@@ -19,6 +21,8 @@ import { createContext, useContext } from "react";
 import type { PerspectiveCamera, Scene, WebGLRenderer } from "three";
 import { InputSystem } from "./input/InputSystem";
 import { GameLoop } from "./loop/GameLoop";
+import type { ChunkColliders } from "./terrain/ChunkColliders";
+import type { ChunkMeshes } from "./terrain/ChunkMeshes";
 import type { VehicleModel } from "./vehicles/models/VehicleModel";
 
 export type Rapier = typeof RAPIER;
@@ -53,14 +57,22 @@ export class GameRuntime {
   edgeT = 0.5;
   /** Number of rendered remote vehicles (perf overlay). */
   remoteCount: () => number = () => 0;
-  /** Height of the ground at (x, z); replaced by the terrain once it is loaded. */
-  groundHeightAt: (x: number, z: number) => number;
+  /** The table's terrain replica; server ops are replayed into it in seq order. */
+  readonly terrain: Terrain;
+  /** Mesh and collider managers once the terrain view is mounted (perf overlay, track marks). */
+  terrainView: { meshes: ChunkMeshes; colliders: ChunkColliders } | null = null;
+  /** Set for one frame when a whole snapshot is applied, so it is not shaded as fresh digging. */
+  suppressFresh = false;
 
   constructor(mapId: MapId, materialId: MaterialId) {
     this.map = MAPS[mapId];
     this.material = MATERIALS[materialId];
-    const ground = this.map.baseTerrain.groundHeight;
-    this.groundHeightAt = () => ground;
+    this.terrain = createTerrainForMap(this.map);
+  }
+
+  /** Ground height (m) at world (x, z). */
+  groundHeightAt(x: number, z: number): number {
+    return this.terrain.heightAt(x, z);
   }
 }
 

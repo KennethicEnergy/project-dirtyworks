@@ -12,8 +12,8 @@ import { RuntimeContext, type GameRuntime } from "./runtime";
 import { HudFeed } from "./HudFeed";
 import { NetSync } from "./NetSync";
 import type { TableSession } from "@/net/tableSession";
+import { TerrainView } from "./terrain/TerrainView";
 import { LocalVehicle } from "./vehicles/LocalVehicle";
-import { FlatGround } from "./world/FlatGround";
 import { Lighting } from "./world/Lighting";
 import { Props } from "./world/Props";
 import { Tabletop } from "./world/Tabletop";
@@ -50,7 +50,7 @@ export default function Game({
           <Physics paused gravity={[0, -GRAVITY, 0]}>
             <PhysicsStepper />
             <Tabletop />
-            <FlatGround />
+            <TerrainView />
             <Props />
             {spawn && <LocalVehicle key={spawnSeq} spawn={spawn} livery={livery} />}
             {session && <NetSync session={session} />}
