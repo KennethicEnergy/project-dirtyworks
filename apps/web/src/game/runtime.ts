@@ -25,6 +25,7 @@ import type { TerrainSync } from "@/net/TerrainSync";
 import type { Dust } from "./fx/Dust";
 import type { ChunkColliders } from "./terrain/ChunkColliders";
 import type { ChunkMeshes } from "./terrain/ChunkMeshes";
+import type { TrackWear } from "./terrain/TrackWear";
 import type { RemoteVehicles } from "./vehicles/RemoteVehicles";
 import type { VehicleModel } from "./vehicles/models/VehicleModel";
 
@@ -65,7 +66,7 @@ export class GameRuntime {
   /** The table's terrain replica; server ops are replayed into it in seq order. */
   readonly terrain: Terrain;
   /** Mesh and collider managers once the terrain view is mounted (perf overlay, track marks). */
-  terrainView: { meshes: ChunkMeshes; colliders: ChunkColliders } | null = null;
+  terrainView: { meshes: ChunkMeshes; colliders: ChunkColliders; wear: TrackWear } | null = null;
   /** Set for one frame when a whole snapshot is applied, so it is not shaded as fresh digging. */
   suppressFresh = false;
   /** The replica's sync state (perf overlay). */

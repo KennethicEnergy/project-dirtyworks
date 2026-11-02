@@ -36,6 +36,7 @@ const SETTINGS: TableSettingsInput = {
 };
 
 let colyseus: ColyseusTestServer;
+const store = createMemorySnapshotStore();
 /** Warn+ log lines from the server, for assertions on structured logging. */
 const logLines: string[] = [];
 const open: ClientRoom[] = [];
@@ -51,7 +52,7 @@ beforeAll(async () => {
     },
     logger: createLogger("warn", {}, (line) => logLines.push(line)),
     reconnectSeconds: RECONNECT_SECONDS,
-    store: createMemorySnapshotStore(),
+    store,
   });
   colyseus = await boot(server);
 });
@@ -348,6 +349,26 @@ describe("terrain", () => {
     const other = await host({ ...SETTINGS, restoreId: tableId }, "mal");
     expect(other.server.state.tableId).not.toBe(tableId);
     expect(other.server.terrainHash()).toBe(createTerrainForMap(MAPS["mini-quarry"]).hash());
+  });
+
+  it("stays forgotten when its owner forgets it in the cafe while the table is still open", async () => {
+    const { room, server } = await host(SETTINGS, "nia");
+    const spawned = await spawn(room, "excavator");
+    room.send(MSG.setKeepForLater, { keep: true });
+    let saved = 0;
+    for (let i = 0; i < 100 && saved === 0; i++) {
+      saved = (await store.list("nia")).length;
+      await sleep(20);
+    }
+    expect(saved).toBe(1);
+    const tableId = server.state.tableId;
+    expect(await store.remove(tableId, "nia")).toBe(true);
+    // The table keeps digging, then closes: neither may bring the saved table back.
+    room.send(MSG.terrainOp, digAt(spawned, 0));
+    await until(() => server.terrainSeq() === 1);
+    await room.leave();
+    await sleep(300);
+    expect(await store.list("nia")).toEqual([]);
   });
 });
 

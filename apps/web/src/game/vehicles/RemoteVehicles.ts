@@ -124,6 +124,11 @@ export class RemoteVehicles {
     return this.remotes.entries();
   }
 
+  /** Visits every remote without allocating an iterator (per-frame systems). */
+  forEach(visit: (view: RemoteView, sessionId: string) => void): void {
+    this.remotes.forEach(visit);
+  }
+
   beginFrame(): void {
     this.frame++;
   }

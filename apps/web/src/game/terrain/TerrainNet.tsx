@@ -43,7 +43,13 @@ export function TerrainNet({ session }: { session: TableSession }) {
     };
     const detach = session.attachTerrain({
       welcome: (w) => load(w.snapshot, w.seq),
-      snapshot: (m) => load(m.snapshot, m.seq),
+      snapshot: (m) => {
+        load(m.snapshot, m.seq);
+        // A reset smooths the table: the track marks go with it.
+        const view = rt.terrainView;
+        const rect = m.reset ? view?.wear.clear() : null;
+        if (view && rect) view.meshes.refreshWear(rect);
+      },
       op: (wire) => sync.receive(wire),
     });
     const off = rt.loop.register("terrain:apply", {

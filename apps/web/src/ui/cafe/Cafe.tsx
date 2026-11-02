@@ -2,7 +2,7 @@
 
 import type { GameUser, Role, TableSettingsInput } from "@dirtyworks/shared";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { errorCodeOf, friendlyError } from "@/net/errors";
 import { createTable, joinTable, lookupInviteCode, stashRoom } from "@/net/tables";
 import { useLobby, type TableRow } from "@/net/useLobby";
@@ -15,6 +15,7 @@ import { Chalkboard } from "./Chalkboard";
 import { CreateTableDialog } from "./CreateTableDialog";
 import { ProfileDialog } from "./ProfileDialog";
 import { Radio } from "./Radio";
+import { SavedTables } from "./SavedTables";
 import { TableFullDialog } from "@/ui/hud/TableFullDialog";
 import { JoinByCodeDialog, PasswordDialog } from "./SmallDialogs";
 
@@ -28,7 +29,9 @@ const GREETINGS = ["Another round of dirt?", "Pull up a chair.", "The sandbox is
 export function Cafe({ user, signOut }: { user: GameUser; signOut: () => Promise<void> }) {
   const router = useRouter();
   const lobby = useLobby();
-  const [greeting] = useState(() => GREETINGS[Math.floor(Math.random() * GREETINGS.length)]);
+  // Picked after mount: a random pick during render differs between server and client markup.
+  const [greeting, setGreeting] = useState(GREETINGS[0]);
+  useEffect(() => setGreeting(GREETINGS[Math.floor(Math.random() * GREETINGS.length)]), []);
   const [banner, setBanner] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -176,6 +179,7 @@ export function Cafe({ user, signOut }: { user: GameUser; signOut: () => Promise
               Join by code
             </Button>
           </div>
+          <SavedTables busy={busy} onReopen={create} />
           <ChallengeBanner />
           <Radio />
         </aside>

@@ -25,12 +25,18 @@ export interface SavedTableMeta extends SavedTableInput {
   bytes: number;
 }
 
-export type SaveResult = { ok: true } | { ok: false; reason: "TOO_LARGE" | "USER_LIMIT" };
+export type SaveResult =
+  { ok: true } | { ok: false; reason: "TOO_LARGE" | "USER_LIMIT" | "FORGOTTEN" };
 
 export interface SnapshotStore {
-  save(meta: SavedTableInput, data: Uint8Array): Promise<SaveResult>;
+  /**
+   * Saves (or re-saves) a table. A table its owner removed stays removed (`FORGOTTEN`) even if
+   * it is still open somewhere, unless `revive` says the host chose to keep it again.
+   */
+  save(meta: SavedTableInput, data: Uint8Array, opts?: { revive?: boolean }): Promise<SaveResult>;
   load(tableId: string, userId: string): Promise<{ meta: SavedTableMeta; data: Uint8Array } | null>;
   list(userId: string): Promise<SavedTableMeta[]>;
+  /** The owner forgets a saved table. */
   remove(tableId: string, userId: string): Promise<boolean>;
   /** Deletes expired tables; returns how many. */
   sweep(): Promise<number>;
@@ -59,11 +65,15 @@ function createStore(backend: Backend, now: () => number): SnapshotStore {
     return next;
   };
   const live = (m: SavedTableMeta) => m.expiresAt > now();
+  /** Tables removed by their owner while possibly still open (this process only). */
+  const forgotten = new Set<string>();
 
   return {
-    save: (input, data) =>
+    save: (input, data, opts) =>
       serial(async () => {
         assertTableId(input.tableId);
+        if (opts?.revive) forgotten.delete(input.tableId);
+        else if (forgotten.has(input.tableId)) return { ok: false, reason: "FORGOTTEN" };
         if (data.byteLength > SAVED_TABLE_MAX_BYTES) return { ok: false, reason: "TOO_LARGE" };
         const index = await backend.readIndex();
         const existing = index.find((m) => m.tableId === input.tableId);
@@ -108,6 +118,7 @@ function createStore(backend: Backend, now: () => number): SnapshotStore {
         if (!meta || meta.ownerId !== userId) return false;
         await backend.deleteBlob(tableId);
         await backend.writeIndex(index.filter((m) => m.tableId !== tableId));
+        forgotten.add(tableId);
         return true;
       }),
 

@@ -83,6 +83,20 @@ function contract(name: string, make: (now: () => number) => SnapshotStore) {
       expect(await store.load("gone12", "alice")).toBeNull();
     });
 
+    it("does not let a still-open table save itself back after its owner forgets it", async () => {
+      const store = make(clock().now);
+      await store.save(meta("forgot"), bytes(4));
+      expect(await store.remove("forgot", "alice")).toBe(true);
+      expect(await store.save(meta("forgot"), bytes(4))).toEqual({
+        ok: false,
+        reason: "FORGOTTEN",
+      });
+      expect(await store.list("alice")).toEqual([]);
+      // Keeping it again is the host's explicit choice: that brings it back.
+      expect(await store.save(meta("forgot"), bytes(4), { revive: true })).toEqual({ ok: true });
+      expect((await store.list("alice")).map((m) => m.tableId)).toEqual(["forgot"]);
+    });
+
     it("refuses table ids that could escape the data directory", async () => {
       const store = make(clock().now);
       await expect(store.save(meta("../../etc/passwd"), bytes(4))).rejects.toThrow();

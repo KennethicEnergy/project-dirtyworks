@@ -696,6 +696,7 @@ export class TableRoom extends Room<{ state: TableState; metadata: TableListing 
   }
 
   /** Saves the table if it is kept and changed since the last save. */
+  /** `force`: the host just chose to keep the table, so save now even if forgotten before. */
   private async persist(force = false): Promise<void> {
     const store = this.deps.store;
     if (!store || !this.state.keepForLater) return;
@@ -711,10 +712,20 @@ export class TableRoom extends Room<{ state: TableState; metadata: TableListing 
           materialId: this.materialId,
         },
         this.terrain.snapshot(),
+        { revive: force },
       );
       if (res.ok) {
         this.lastSavedSeq = seq;
         this.log.info("table saved", { tableId: this.state.tableId, seq });
+      } else if (res.reason === "FORGOTTEN") {
+        // The owner forgot it in the cafe while it was still open: stop keeping it.
+        this.state.keepForLater = false;
+        this.log.info("table forgotten by its owner", { tableId: this.state.tableId });
+        this.notice({
+          kind: "info",
+          name: "",
+          text: "This table was forgotten in the cafe, so it won't be kept.",
+        });
       } else {
         this.log.warn("table not saved", { tableId: this.state.tableId, reason: res.reason });
         this.notice({
