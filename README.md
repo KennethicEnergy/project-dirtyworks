@@ -10,16 +10,18 @@ pressure. Just a perfectly good pile.
 
 ## Screenshots
 
-|                                                                                                    |                                                                                                           |
-| -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| ![Landing page with Google sign-in and the dev-only guest login](docs/screenshots/01-landing.png)  | ![The cafe: chalkboard table browser, daily challenge and cafe radio](docs/screenshots/02-cafe.png)       |
-| **Landing.** Sign in with Google (or the dev-only guest login).                                    | **The cafe.** Live chalkboard of open tables, daily challenge, radio.                                     |
-| ![The garage: vehicle picker with a 3D preview and livery options](docs/screenshots/03-garage.png) | ![Excavator digging, with tool hints and the bucket gauge](docs/screenshots/05-excavator-dig.png)         |
-| **The garage.** Pick a vehicle and paint it.                                                       | **Digging.** Close the bucket below ground to fill it.                                                    |
-| ![Bulldozer pushing a windrow of dirt](docs/screenshots/06-bulldozer-push.png)                     | ![Tilt-shift view of a dump truck charging on the green pad](docs/screenshots/07-tilt-shift-charging.png) |
-| **Pushing.** Lower the blade and drive forward.                                                    | **Tilt-shift and charging.** Park on the green pad to top up.                                             |
-| ![The touch transmitter on a phone in landscape](docs/screenshots/08-touch-transmitter.png)        |                                                                                                           |
-| **Touch.** On phones and tablets the transmitter is the controller.                                |                                                                                                           |
+|                                                                                                           |                                                                                                           |
+| --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| ![Landing page with Google sign-in and the dev-only guest login](docs/screenshots/01-landing.png)         | ![The cafe: chalkboard table browser, daily challenge and cafe radio](docs/screenshots/02-cafe.png)       |
+| **Landing.** Sign in with Google (or the dev-only guest login).                                           | **The cafe.** Live chalkboard of open tables, daily challenge, radio.                                     |
+| ![The garage: vehicle picker with a 3D preview and livery options](docs/screenshots/03-garage.png)        | ![Excavator digging, with tool hints and the bucket gauge](docs/screenshots/05-excavator-dig.png)         |
+| **The garage.** Pick a vehicle and paint it.                                                              | **Digging.** Close the bucket below ground to fill it.                                                    |
+| ![Bulldozer pushing a windrow of dirt](docs/screenshots/06-bulldozer-push.png)                            | ![Tilt-shift view of a dump truck charging on the green pad](docs/screenshots/07-tilt-shift-charging.png) |
+| **Pushing.** Lower the blade and drive forward.                                                           | **Tilt-shift and charging.** Park on the green pad to top up.                                             |
+| ![The touch transmitter on a phone in landscape](docs/screenshots/08-touch-transmitter.png)               | ![A spectator watching Alice, with the spectator bar and name tags](docs/screenshots/09-spectate.png)     |
+| **Touch.** On phones and tablets the transmitter is the controller.                                       | **Spectating.** Switch drivers with ← / →, or try for a seat.                                             |
+| ![An excavator has just dropped a bucketful into Bob's dump truck](docs/screenshots/10-loading-truck.png) | ![A saved photo: the table on a cream mat with the logo and table name](docs/screenshots/11-photo.png)    |
+| **Loading a truck.** Open the bucket over the bed.                                                        | **Photo mode.** P hides the HUD and saves a framed PNG.                                                   |
 
 ## How it works (a quick tour)
 
@@ -50,9 +52,17 @@ pressure. Just a perfectly good pile.
    drops (it never stops you). Park on a green **charging pad** to recharge. The status LED on the
    antenna mount shows green (ok), blue blinking (hydraulics busy), amber (low) or pulsing green
    (charging).
-7. **Hang out.** Chat (Enter), see who's here (Tab), share the invite code from the table menu,
-   and mute or report someone. Hosts can also kick or ban players, dim the lights, and close the
-   table.
+7. **Hang out.** Chat (Enter), send a quick emote (1–5: thumbs up, "Ha!", "Nice dig!", "My
+   turn?", honk) that pops up above your spot on the rim, see who's here (Tab), share the invite
+   code from the table menu, and mute or report someone. Everyone's operator stands at the rim
+   with their avatar, and other drivers' vehicles carry name tags.
+8. **Watch, or take a photo.** Spectators switch between drivers with ← / → and can try for a
+   seat at any time. Photo mode (P or 📷) hides the HUD, frees the camera, and saves a framed
+   PNG with the table's name.
+9. **Host the table.** Hosts can kick or ban players, dim the lights, **smooth the table** back to
+   its starting terrain, close the table, and **keep it for later**: a kept table's terrain is
+   saved for 7 days and listed in the cafe under "Your saved tables", ready to reopen (up to 5).
+   Today's table challenge is on the cafe wall and in the table menu.
 
 ## Controls
 
@@ -65,7 +75,10 @@ pressure. Just a perfectly good pile.
 | Camera (operator → chase → free) | V                     | Right stick click                               | CAM button             |
 | Garage                           | G                     | Start                                           | GARAGE button          |
 | Chat                             | Enter                 |                                                 | Chat button            |
+| Emotes                           | 1 – 5                 | D-pad                                           | 😊 button              |
 | Player list                      | Tab                   | Back / Select                                   | Player avatars         |
+| Spectate: previous / next driver | ← / →                 | LB / RB                                         | ‹ › buttons            |
+| Photo mode                       | P                     |                                                 | 📷 button              |
 | Perf overlay                     | F3                    |                                                 |                        |
 | Close menus                      | Esc                   |                                                 |                        |
 
@@ -141,33 +154,104 @@ docs/
 
 ## Under the hood
 
-- **Networking.** Each table is a Colyseus room. Players own their vehicle's movement and send
-  their state 20 times a second; the server checks every update against the vehicle's limits
-  (speed, acceleration, teleports) and snaps cheaters back. Everyone else's vehicles are drawn
-  from a 100 ms interpolation buffer.
-- **Terrain.** A chunked, deterministic heightmap (1/1024 m steps, integer brush math). Players
-  send _intents_ (dig, release, dump, push); the server validates them, applies them in order,
-  and broadcasts numbered ops. Clients replay the ops and check the result, so every screen stays
-  identical. Late joiners get a compressed snapshot plus the ops since. Material slumps to its
-  angle of repose, and volume is conserved.
-- **Game loop.** One frame loop with named phases (inputs → vehicle → physics → network →
-  terrain → camera → visuals → audio → render). Physics (Rapier) is stepped manually at ~60 Hz.
+- **Networking.** Each table is a Colyseus room (the cafe's chalkboard is Colyseus' lobby room).
+  Players own their vehicle's movement and send their state 20 times a second; the server checks
+  every update against the vehicle's limits (speed, acceleration, displacement) and, after three
+  implausible updates in a row, snaps the player back to their last valid pose. Everyone else's
+  vehicles are drawn from a 100 ms interpolation buffer keyed by server time, with kinematic
+  colliders so you can bump into them.
+  - _Upgrade path:_ movement is client-authoritative today (cheap, smooth, cheatable within the
+    tolerances). The next step is server-side simulation of vehicles from inputs with client
+    prediction; scaling past one process needs Colyseus' Redis presence and driver, the table
+    registry moved into presence, and saved tables in shared storage instead of local disk.
+- **Terrain.** A chunked, deterministic heightmap (1 m cells, heights in 1/1024 m quanta, integer
+  brush math, no floating-point drift). Players send _intents_ (dig, release, dump, push); the
+  server validates each one (reach, rate, plausible volume), applies it with the same shared code,
+  numbers it, and broadcasts the op with the volume it actually moved. Clients replay ops in
+  sequence order and compare that volume; a gap or a mismatch triggers a resync (a compressed
+  snapshot: per-chunk height deltas, deflated). Late joiners get the snapshot plus the ops since.
+  Material slumps to its angle of repose (sand 30°, gravel 38°, damp dirt 45°) and volume is
+  conserved; loads live on the server, so a bucket can only drop what it dug.
+- **Game loop.** One loop, ticked by the only `useFrame` in the game, runs registered systems in
+  fixed phases: `inputs` → `player:pre-physics` → `vehicle:pre-physics` → `terrain:colliders` →
+  `physics` → `vehicle:post-physics` → `network:send` → `network:interpolate` → `terrain:apply` →
+  `camera` → `visuals` → `audio` → `render`. Physics (Rapier) is stepped manually at ~60 Hz.
+- **Rendering.** One mesh per 32 m chunk with a half-resolution LOD, at most two rebuilds per
+  frame; heightfield colliders rebuild at most every 100 ms and swap in without a gap. The terrain
+  shader blends rock / dirt / sand by slope and height, darkens fresh digging for ~20 s, and shows
+  track marks (at most 4,096 worn vertices, fading over 90 s).
 - **Auth.** Auth.js (Google) on the web side mints a short-lived game token that the game server
   verifies. Only the Google display name and avatar are shared with other players.
 
-## Status
+## Deployment
 
-Built so far: sign-in, the cafe and table browser, table creation (passwords, invite codes,
-limits), the four vehicles with physics, multiplayer driving, chat, the garage and liveries, host
-moderation, shared terrain digging/hauling/pushing, the minimap and perf overlay, the operator
-camera, the RC transmitter (including touch), battery and charging, sound, and tilt-shift.
+The two apps deploy separately: long-lived WebSockets do not work on serverless hosting.
 
-In progress: emotes (keys 1–5) shown above each player's spot on the rim, nameplates, a spectator
-bar for switching between drivers, and photo mode (P).
+**Web (`apps/web`) → Vercel.** Import the repository, set the project's root directory to
+`apps/web`, and add `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `GAME_JWT_SECRET` and
+`NEXT_PUBLIC_GAME_SERVER_URL` (the game server's public `https://` URL). Leave `AUTH_DEV_LOGIN`
+unset: guest login is ignored in production anyway. In Google Cloud Console, add
+`https://<your-web-domain>/api/auth/callback/google` as an authorized redirect URI.
 
-Planned next: ground-material looks and track marks, host buttons for resetting the terrain and
-keeping a table for later (the server already supports both), reopening saved tables from the
-cafe, daily challenge polish, deployment notes and a Dockerfile for the game server.
+**Game server (`apps/server`) → Fly.io or Railway**, from the multi-stage Dockerfile (Node 24
+Alpine; the server and the shared package are bundled with esbuild, and only runtime dependencies
+ship). Build from the repository root:
+
+```bash
+docker build -f apps/server/Dockerfile -t dirtyworks-server .
+docker run -p 2567:2567 -e GAME_JWT_SECRET=... -e ALLOWED_ORIGINS=https://your.site \
+  -v dirtyworks-data:/data dirtyworks-server
+```
+
+| Variable          | Value                                                                |
+| ----------------- | -------------------------------------------------------------------- |
+| `GAME_JWT_SECRET` | Same value as the web app (32+ characters)                           |
+| `ALLOWED_ORIGINS` | The web app's origin(s), comma-separated                             |
+| `PORT`            | `2567` by default                                                    |
+| `DATA_DIR`        | `/data` in the image: mount a persistent volume there (saved tables) |
+| `LOG_LEVEL`       | `info` (JSON lines on stdout)                                        |
+
+On Fly.io: `fly launch --dockerfile apps/server/Dockerfile`, create a volume
+(`fly volumes create dirtyworks_data --size 1`), mount it at `/data` in `fly.toml`, set the two
+secrets with `fly secrets set`, and point the health check at `GET /health`. Run **one** instance:
+tables, invite codes and the 3-tables-per-host limit live in that process. On shutdown the server
+closes its tables gracefully, so kept tables are saved before a redeploy.
+
+## Adding a vehicle or a map
+
+**A vehicle.** Add its id to `VEHICLE_IDS` and its spec to `VEHICLES` in
+`packages/shared/src/vehicles.ts`: chassis, wheels or tracks, speeds, suspension, joints (with
+their keys and hint text), the tool rig and the tool (bucket, bed or blade). The server validates
+movement and tool use from this spec, so nothing else is needed there. On the web side, build a
+model that implements `VehicleModel` (`apps/web/src/game/vehicles/models/`, primitives today; a
+GLB loader can map the same node names), register it in `createVehicleModel`, and give it an icon
+in `VEHICLE_ICON`. The garage, transmitter, tool hints, track marks and nameplates read the spec.
+
+**A map (diorama).** Add its id to `MAP_IDS` (`packages/shared/src/ids.ts`) and its entry to
+`MAPS` (`packages/shared/src/maps.ts`): size, base terrain generator and its parameters, bedrock
+rules, spawn points, props (including at least one charging station), ambience for day and night,
+default material and tabletop. Both sides build the terrain from that entry, so the create-table
+dialog and the minimap pick it up automatically.
+
+## Known limitations
+
+- Movement is client-authoritative; a determined cheater can bend physics within the server's
+  tolerances.
+- Your own terrain edits appear one round trip late (instant dust and sound hide most of it).
+- One server process: no horizontal scaling, and saved tables live on that machine's disk.
+- Challenges are an honor-system check-off; the cafe radio shows channel names but plays no music.
+- Sounds come from a small built-in synthesizer; there are no audio files yet.
+- The Dockerfile's steps were rehearsed locally (install, bundle, start, `/health`), but the image
+  itself has not been built here: Docker is not installed on the development machine.
+- The browser smoke tests use software WebGL, so their frame rates are not representative.
+
+## Next ideas
+
+- GLB vehicle models behind the existing `VehicleModel` interface.
+- Challenge detection (pile height, flatness, truckloads) and friendly leaderboards.
+- Server-side vehicle simulation with client prediction.
+- A table timelapse: replay the op log from the first scoop.
+- More dioramas and materials (wet sand that holds steeper walls, mud that leaves deep ruts).
 
 ## Privacy
 
