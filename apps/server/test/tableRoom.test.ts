@@ -14,6 +14,7 @@ import {
   MSG,
   type EmoteEvent,
   type MaterialId,
+  type NoticeEvent,
   type SpawnedEvent,
   type Welcome,
   type TableSettingsInput,
@@ -427,11 +428,14 @@ describe("driving", () => {
     expect(await chat).toMatchObject({ text: "still here" });
   });
 
-  it("disconnects a client that keeps sending garbage", async () => {
-    const { room } = await host();
-    const left = new Promise<number>((resolve) => room.onLeave((code) => resolve(code)));
-    for (let i = 0; i < 25; i++) room.send(MSG.state, { nope: i });
+  it("disconnects a client that keeps sending garbage, without holding its seat", async () => {
+    const { server } = await host();
+    const bob = await joinAs(server.roomId, "bob");
+    const left = new Promise<number>((resolve) => bob.room.onLeave((code) => resolve(code)));
+    for (let i = 0; i < 25; i++) bob.room.send(MSG.state, { nope: i });
     await left;
+    await sleep(200); // well inside the (1 s test) reconnection hold
+    expect(server.state.players.has(bob.room.sessionId)).toBe(false);
   });
 });
 
@@ -505,6 +509,64 @@ describe("hosting and moderation", () => {
     room.send(MSG.kick, { target: bob.room.sessionId });
     await left;
     await until(() => !server.state.players.has(bob.room.sessionId));
+  });
+
+  it("frees a kicked player's seat at once, with no reconnection hold or lost-signal notice", async () => {
+    const { room, server } = await host();
+    const bob = await joinAs(server.roomId, "bob");
+    const notices: NoticeEvent[] = [];
+    room.onMessage(MSG.notice, (n: NoticeEvent) => notices.push(n));
+    room.send(MSG.kick, { target: bob.room.sessionId });
+    await sleep(200); // well inside the (1 s test) reconnection hold
+    expect(server.state.players.has(bob.room.sessionId)).toBe(false);
+    expect(notices.map((n) => n.kind)).not.toContain("drop");
+  });
+
+  it("does not let a banned player back in with their reconnection token", async () => {
+    const { room, server } = await host();
+    const bob = await joinAs(server.roomId, "bob");
+    const token = bob.room.reconnectionToken;
+    room.send(MSG.ban, { target: bob.room.sessionId });
+    await sleep(200);
+    await expect(bob.client.reconnect(token)).rejects.toBeTruthy();
+    await sleep(100);
+    expect([...server.state.players.values()].some((p) => p.userId === "bob")).toBe(false);
+  });
+
+  it("does not let a player kicked while dropped come back", async () => {
+    const { room, server } = await host();
+    const bob = await joinAs(server.roomId, "bob");
+    const sessionId = bob.room.sessionId;
+    const token = bob.room.reconnectionToken;
+    bob.room.leave(false);
+    await until(() => server.state.players.get(sessionId)?.connected === false);
+    room.send(MSG.kick, { target: sessionId });
+    await until(() => !server.state.players.has(sessionId));
+    const back = await bob.client.reconnect(token).catch(() => null);
+    if (back) {
+      track(back);
+      const left = await Promise.race([
+        new Promise<boolean>((r) => back.onLeave(() => r(true))),
+        sleep(500).then(() => false),
+      ]);
+      expect(left).toBe(true);
+    }
+    expect(server.state.players.has(sessionId)).toBe(false);
+  });
+
+  it("closes a table without unhandled rejections", async () => {
+    const seen: unknown[] = [];
+    const onRejection = (reason: unknown) => seen.push(reason);
+    process.on("unhandledRejection", onRejection);
+    try {
+      const { room, server } = await host();
+      await joinAs(server.roomId, "bob");
+      room.send(MSG.closeTable);
+      await sleep(400);
+    } finally {
+      process.off("unhandledRejection", onRejection);
+    }
+    expect(seen).toEqual([]);
   });
 
   it("keeps a banned player out for the rest of the session", async () => {

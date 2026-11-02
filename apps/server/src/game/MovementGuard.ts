@@ -1,9 +1,15 @@
-/** Per-player wrapper around `validateMovement`: last valid pose, server-side dt, strike counter. */
+/**
+ * Per-player wrapper around `validateMovement`: last valid pose, server-side dt, strike counter,
+ * and the displacement-slack budget that keeps sustained speed near the vehicle's top speed.
+ */
 import {
   copyPose,
+  excessDisplacement,
   identityPose,
+  MOVEMENT_TOLERANCE,
   validateMovement,
   type Bounds,
+  type MovementCheck,
   type MovementReason,
   type Pose,
   type VehicleSpec,
@@ -19,6 +25,8 @@ export class MovementGuard {
   readonly lastValid: Pose = identityPose();
   private lastAt = 0;
   private strikes = 0;
+  /** Displacement slack left (m): spent by moves beyond top speed, refilled with time. */
+  private slack: number = MOVEMENT_TOLERANCE.slackBudget;
 
   constructor(
     private spec: VehicleSpec,
@@ -31,15 +39,25 @@ export class MovementGuard {
     copyPose(pose, this.lastValid);
     this.lastAt = nowMs;
     this.strikes = 0;
+    this.slack = MOVEMENT_TOLERANCE.slackBudget;
   }
 
   accept(next: Pose, nowMs: number): GuardResult {
+    const T = MOVEMENT_TOLERANCE;
     const dt = (nowMs - this.lastAt) / 1000;
-    const check = validateMovement(this.lastValid, next, this.spec, this.bounds, dt);
+    let check: MovementCheck = validateMovement(this.lastValid, next, this.spec, this.bounds, dt);
+    let slack = this.slack;
+    let excess = 0;
+    if (check.ok) {
+      slack = Math.min(T.slackBudget, slack + Math.max(0, dt) * T.slackRefill);
+      excess = excessDisplacement(this.lastValid, next, this.spec, dt);
+      if (excess > slack) check = { ok: false, reason: "overspeed" };
+    }
     if (check.ok) {
       copyPose(next, this.lastValid);
       this.lastAt = nowMs;
       this.strikes = 0;
+      this.slack = slack - excess;
       return check;
     }
     this.strikes++;

@@ -18,6 +18,12 @@ export const MOVEMENT_TOLERANCE = {
   /** Displacement allowed per update: displacementFactor × maxSpeed × dt + displacementSlack. */
   displacementFactor: 1.3,
   displacementSlack: 0.75,
+  /**
+   * The per-update slack is for bumps and jitter, not for every update: what a player uses of it
+   * comes out of a budget (m) that refills over time (m/s), so sustained speed stays near the top.
+   */
+  slackBudget: 1.5,
+  slackRefill: 1.5,
   /** Horizontal Δv allowed: (accelFactor × maxAccel + accelSlack) × dt + deltaVSlack. */
   accelFactor: 1.5,
   accelSlack: 2,
@@ -92,4 +98,17 @@ export function validateMovement(
   }
 
   return { ok: true };
+}
+
+/** Displacement beyond top-speed travel in this update (m): the part only the slack can cover. */
+export function excessDisplacement(
+  prev: Pose,
+  next: Pose,
+  spec: VehicleSpec,
+  dtSec: number,
+): number {
+  const T = MOVEMENT_TOLERANCE;
+  const dt = Math.min(T.maxDt, Math.max(T.minDt, dtSec));
+  const d = Math.hypot(next.x - prev.x, next.z - prev.z);
+  return Math.max(0, d - T.displacementFactor * spec.maxSpeed * dt);
 }

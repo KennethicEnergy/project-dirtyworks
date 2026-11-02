@@ -105,6 +105,10 @@ export class TableRoom extends Room<{ state: TableState; metadata: TableListing 
   private creatorId = "";
   private createdAt = 0;
   private readonly bans = new Set<string>();
+  /** Sessions the server is disconnecting itself: their close must not hold a seat. */
+  private readonly noHold = new Set<string>();
+  /** The host closed the table: every client is on its way out. */
+  private closing = false;
   private readonly info = new Map<string, ClientInfo>();
   private readonly chat: ChatEntry[] = [];
   private chatSeq = 0;
@@ -247,22 +251,32 @@ export class TableRoom extends Room<{ state: TableState; metadata: TableListing 
     this.log.info("player joined", { userId: user.id, role });
   }
 
+  /**
+   * Only a lost connection holds the seat. Every close the server starts (kick, ban, closing the
+   * table, a misbehaving client) also arrives here, as a non-consented close: those leave at once
+   * (Colyseus calls onLeave when no reconnection is allowed).
+   */
   override onDrop(client: Client) {
     const player = this.state.players.get(client.sessionId);
-    if (!player) return;
+    if (!player || this.closing || this.noHold.delete(client.sessionId)) return;
     player.connected = false;
     this.notice({
       kind: "drop",
       name: player.name,
       text: `${player.name}'s controller lost signal…`,
     });
-    this.allowReconnection(client, this.deps.reconnectSeconds);
+    // Rejects when the room is shutting down meanwhile; nothing is waiting on it.
+    this.allowReconnection(client, this.deps.reconnectSeconds).catch(() => {});
     this.log.info("player dropped", { userId: player.userId });
   }
 
   override onReconnect(client: Client) {
     const player = this.state.players.get(client.sessionId);
-    if (!player) return;
+    // Kicked or banned while the seat was held: the reconnection is refused.
+    if (!player || this.bans.has(player.userId)) {
+      client.leave(CLOSE.KICKED);
+      return;
+    }
     player.connected = true;
     const info = this.info.get(client.sessionId);
     if (info?.guard) info.guard.reset(info.guard.lastValid, this.deps.now());
@@ -510,6 +524,7 @@ export class TableRoom extends Room<{ state: TableState; metadata: TableListing 
       if (!this.isHost(client)) return;
       this.log.info("table closed by host");
       this.broadcast(MSG.tableClosed, { reason: "closed" });
+      this.closing = true;
       void this.disconnect(CLOSE.CLOSED);
     });
 
@@ -560,6 +575,7 @@ export class TableRoom extends Room<{ state: TableState; metadata: TableListing 
     this.log.warn("invalid message", { userId: info.user.id, type, count: info.violations });
     if (info.violations >= VIOLATION_LIMIT) {
       this.log.warn("disconnecting misbehaving client", { userId: info.user.id });
+      this.noHold.add(client.sessionId);
       client.leave(CLOSE.MISBEHAVING);
     }
   }
@@ -629,20 +645,21 @@ export class TableRoom extends Room<{ state: TableState; metadata: TableListing 
     if (!player) return;
     if (ban) this.bans.add(player.userId);
     this.log.info(ban ? "player banned" : "player kicked", { userId: player.userId });
+    // The seat is freed now, before the close reaches onDrop/onLeave (which then find no player).
+    // A dropped player's pending reconnection is refused in onReconnect.
+    this.state.players.delete(sessionId);
+    this.info.delete(sessionId);
     const target = this.clients.get(sessionId);
     if (target) {
       target.send(MSG.tableClosed, { reason: ban ? "banned" : "kicked" });
       target.leave(ban ? CLOSE.BANNED : CLOSE.KICKED);
-    } else {
-      // Dropped and waiting to reconnect: free the seat now.
-      this.state.players.delete(sessionId);
-      this.info.delete(sessionId);
     }
     this.notice({
       kind: ban ? "ban" : "kick",
       name: player.name,
       text: ban ? `${player.name} was asked to leave the table.` : `${player.name} was kicked.`,
     });
+    void this.setMetadata(this.listing());
   }
 
   private pickSpawn(sessionId: string) {
