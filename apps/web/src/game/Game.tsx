@@ -14,6 +14,8 @@ import { HudFeed } from "./HudFeed";
 import { NetSync } from "./NetSync";
 import type { TableSession } from "@/net/tableSession";
 import { DustSystem } from "./fx/DustSystem";
+import { Nameplates } from "./fx/Nameplates";
+import { OperatorChips } from "./fx/OperatorChips";
 import { TerrainNet } from "./terrain/TerrainNet";
 import { TerrainView } from "./terrain/TerrainView";
 import { ToolSystem } from "./vehicles/ToolSystem";
@@ -37,15 +39,16 @@ export default function Game({
   livery: Livery;
 }) {
   const preset = QUALITY[useSettings((s) => s.quality)];
+  // R3F bridges this context into the Canvas; the DOM overlays read it outside the Canvas.
   return (
-    <Canvas
-      shadows={preset.shadows ? "percentage" : false}
-      dpr={[1, preset.dprCap]}
-      camera={{ fov: 45, near: 0.5, far: 2500, position: [0, 70, -100] }}
-      gl={{ antialias: true, powerPreference: "high-performance" }}
-      className="touch-none"
-    >
-      <RuntimeContext.Provider value={runtime}>
+    <RuntimeContext.Provider value={runtime}>
+      <Canvas
+        shadows={preset.shadows ? "percentage" : false}
+        dpr={[1, preset.dprCap]}
+        camera={{ fov: 45, near: 0.5, far: 2500, position: [0, 70, -100] }}
+        gl={{ antialias: true, powerPreference: "high-performance" }}
+        className="touch-none"
+      >
         <Lighting />
         <LoopDriver />
         <CameraRig />
@@ -64,7 +67,9 @@ export default function Game({
             <DustSystem />
           </Physics>
         </Suspense>
-      </RuntimeContext.Provider>
-    </Canvas>
+      </Canvas>
+      {session && <Nameplates session={session} />}
+      {session && <OperatorChips session={session} />}
+    </RuntimeContext.Provider>
   );
 }

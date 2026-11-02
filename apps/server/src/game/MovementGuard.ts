@@ -46,6 +46,9 @@ export class MovementGuard {
     if (this.strikes >= STRIKES_BEFORE_CORRECTION) {
       this.strikes = 0;
       this.lastAt = nowMs;
+      // The client stops dead when it snaps back; judging its next update against the old
+      // velocity would reject it (sharp Δv) again and again.
+      this.lastValid.vx = this.lastValid.vy = this.lastValid.vz = 0;
       return {
         ok: false,
         reason: check.reason,

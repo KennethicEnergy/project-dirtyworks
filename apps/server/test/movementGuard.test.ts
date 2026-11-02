@@ -34,6 +34,19 @@ describe("MovementGuard", () => {
     if (!fourth.ok) expect(fourth.correction).toBeNull();
   });
 
+  it("lets a corrected player drive on from rest (the client zeroes its velocity on a snap)", () => {
+    const guard = new MovementGuard(spec, bounds);
+    guard.reset(at(0, 10), 1000);
+    // A crash: 10 m/s to standstill in one update is too sharp, three times over.
+    guard.accept(at(0.5), 1050);
+    guard.accept(at(0.5), 1100);
+    const third = guard.accept(at(0.5), 1150);
+    expect(third.ok).toBe(false);
+    if (!third.ok) expect(third.correction).toMatchObject({ x: 0, vx: 0, vy: 0, vz: 0 });
+    // Back at the corrected spot and standing still: accepted, not rubber-banded forever.
+    expect(guard.accept(at(0), 1200)).toEqual({ ok: true });
+  });
+
   it("resets the strike count after a legal update", () => {
     const guard = new MovementGuard(spec, bounds);
     guard.reset(at(0), 1000);

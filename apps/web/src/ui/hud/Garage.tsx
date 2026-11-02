@@ -1,8 +1,10 @@
 "use client";
 
-import { VEHICLE_IDS, VEHICLES, type VehicleId } from "@dirtyworks/shared";
+import { MSG, VEHICLE_IDS, VEHICLES, type Livery, type VehicleId } from "@dirtyworks/shared";
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { liverySendDelay } from "@/net/liverySync";
+import type { TableSession } from "@/net/tableSession";
 import { useProfile } from "@/state/profileStore";
 import { useSession } from "@/state/sessionStore";
 import { useUi } from "@/state/uiStore";
@@ -22,6 +24,31 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
+const sameLivery = (a: Livery, b: Livery) =>
+  a.color === b.color && a.decal === b.decal && a.number === b.number;
+
+/** A repaint while driving reaches everyone else without a respawn (a spawn carries its own). */
+function useLiverySync(session: TableSession | null, driving: boolean, livery: Livery): void {
+  const synced = useRef(livery);
+  const lastSentAt = useRef(0);
+  useEffect(() => {
+    if (!session || !driving) {
+      synced.current = livery;
+      return;
+    }
+    if (sameLivery(synced.current, livery)) return;
+    const timer = setTimeout(
+      () => {
+        synced.current = livery;
+        lastSentAt.current = Date.now();
+        session.send(MSG.livery, livery);
+      },
+      liverySendDelay(Date.now(), lastSentAt.current),
+    );
+    return () => clearTimeout(timer);
+  }, [session, driving, livery]);
+}
+
 /** Pick a vehicle and paint, preview it, press Drive. G reopens it any time (respawns). */
 export function Garage() {
   const { session } = useTableUi();
@@ -33,6 +60,7 @@ export function Garage() {
   const livery = useProfile((s) => s.livery);
   const setLivery = useProfile((s) => s.setLivery);
   const [vehicle, setVehicle] = useState<VehicleId>(spawn?.vehicle ?? "excavator");
+  useLiverySync(session, !!spawn, livery);
 
   const firstVisit = role === "driver" && status === "joined" && !spawn;
   if (!open && !firstVisit) return null;

@@ -8,11 +8,14 @@ import { useSession } from "@/state/sessionStore";
 import { useUi } from "@/state/uiStore";
 import { Avatar } from "@/ui/common/Avatar";
 import { ChatPanel } from "./ChatPanel";
+import { EmoteBar } from "./EmoteBar";
 import { Minimap } from "./Minimap";
 import { PerfOverlay } from "./PerfOverlay";
 import { Garage } from "./Garage";
+import { PhotoMode } from "./PhotoMode";
 import { PlayerList } from "./PlayerList";
 import { SettingsDialog } from "./SettingsDialog";
+import { SpectateBar } from "./SpectateBar";
 import { TableMenu } from "./TableMenu";
 import { useTableUi } from "./TableUiContext";
 import { Toasts } from "./Toasts";
@@ -101,6 +104,15 @@ function TopRight() {
       )}
       <button
         type="button"
+        aria-label="Photo mode"
+        title="Photo mode (P)"
+        onClick={() => setUi({ photoMode: true })}
+        className="rounded-full bg-hud/80 px-3 py-1.5 hover:bg-hud"
+      >
+        📷
+      </button>
+      <button
+        type="button"
         aria-label="Settings"
         onClick={() => setUi({ settingsOpen: true })}
         className="rounded-full bg-hud/80 px-3 py-1.5 hover:bg-hud"
@@ -126,14 +138,40 @@ export function Hud() {
   const settingsOpen = useUi((s) => s.settingsOpen);
   const spawn = useSession((s) => s.spawn);
   const role = useSession((s) => s.role);
+  const photo = useUi((s) => s.photoMode);
   const touch = useTouchMode();
   useTableHotkeys();
 
-  // Driving input pauses while typing or browsing menus.
+  // Driving input pauses while typing, browsing menus or framing a photo.
   const inGarage = garageOpen || (role === "driver" && !spawn);
   useEffect(() => {
-    runtime.input.enabled = !(chatOpen || inGarage || settingsOpen);
-  }, [runtime, chatOpen, inGarage, settingsOpen]);
+    runtime.input.enabled = !(chatOpen || inGarage || settingsOpen || photo);
+  }, [runtime, chatOpen, inGarage, settingsOpen, photo]);
+
+  const notices = (
+    <div className="absolute top-3 left-1/2 w-full max-w-md -translate-x-1/2 px-3">
+      {status === "reconnecting" && (
+        <p className="mx-auto mb-1 w-fit rounded-full bg-brick-500 px-4 py-1 text-sm">
+          Controller lost signal. Reconnecting…
+        </p>
+      )}
+      <Toasts />
+    </div>
+  );
+
+  // Photo mode: nothing over the scene but the photo bar (and toasts).
+  if (photo) {
+    return (
+      <div className="pointer-events-none absolute inset-0 text-cream-50 select-none">
+        {notices}
+        <div className="absolute inset-x-0 bottom-4 flex justify-center px-3">
+          <PhotoMode />
+        </div>
+      </div>
+    );
+  }
+
+  const spectating = role === "spectator";
 
   return (
     <div className="pointer-events-none absolute inset-0 text-cream-50 select-none">
@@ -141,14 +179,7 @@ export function Hud() {
         <TableMenu />
         <TopRight />
       </div>
-      <div className="absolute top-3 left-1/2 w-full max-w-md -translate-x-1/2 px-3">
-        {status === "reconnecting" && (
-          <p className="mx-auto mb-1 w-fit rounded-full bg-brick-500 px-4 py-1 text-sm">
-            Controller lost signal. Reconnecting…
-          </p>
-        )}
-        <Toasts />
-      </div>
+      {notices}
       {touch ? (
         <>
           {/* The bottom belongs to the transmitter (the touch controller). */}
@@ -156,11 +187,14 @@ export function Hud() {
             <VehicleCard />
             <ChatPanel />
           </div>
-          <div className="absolute top-16 right-3 hidden sm:block">
-            <Minimap />
+          <div className="absolute top-16 right-3 flex flex-col items-end gap-2">
+            <div className="hidden sm:block">
+              <Minimap />
+            </div>
+            <EmoteBar />
           </div>
           <div className="absolute inset-x-0 bottom-2 flex justify-center px-2">
-            <Transmitter />
+            {spectating ? <SpectateBar /> : <Transmitter />}
           </div>
         </>
       ) : (
@@ -170,13 +204,22 @@ export function Hud() {
             <VehicleCard />
           </div>
           <div className="absolute right-48 bottom-3 left-56 hidden flex-col items-center gap-2 sm:flex">
-            <Transmitter />
-            <div className="hidden lg:block">
-              <ToolHints />
-            </div>
+            {spectating ? (
+              <SpectateBar />
+            ) : (
+              <>
+                <Transmitter />
+                <div className="hidden lg:block">
+                  <ToolHints />
+                </div>
+              </>
+            )}
           </div>
-          <div className="absolute right-3 bottom-3 hidden sm:block">
-            <Minimap />
+          <div className="absolute right-3 bottom-3 flex flex-col items-end gap-2">
+            <EmoteBar />
+            <div className="hidden sm:block">
+              <Minimap />
+            </div>
           </div>
         </>
       )}
